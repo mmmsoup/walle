@@ -17,11 +17,14 @@
 // https://github.com/baskerville/bspwm/issues/1382
 #include "bspwm.h"
 
+extern Atom ATOM_WM_PROTOCOLS;
+extern Atom ATOM_WM_DELETE_WINDOW;
+
 extern Atom ATOM_NET_WM_STRUT;
 extern Atom ATOM_NET_WM_STRUT_PARTIAL;
+
 extern Atom ATOM_WALLPAPER_PATH;
-extern Atom ATOM_WM_DELETE_WINDOW;
-extern Atom ATOM_WM_PROTOCOLS;
+extern Atom ATOM_WALLPAPER_TRANSITION_DURATION;
 
 int common_init(Display *);
 

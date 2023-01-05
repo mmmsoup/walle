@@ -11,6 +11,7 @@ set(BUILD_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/include)
 # ============
 
 # == CONFIG ==
+string(TOUPPER "${PROJECT_NAME}" PROJECT_NAME_CAPS)
 configure_file("${CMAKE_CURRENT_LIST_DIR}/config.h.in" "${BUILD_INCLUDE_DIR}/config.h")
 # ============
 

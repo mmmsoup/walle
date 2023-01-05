@@ -50,8 +50,40 @@ int main(int argc, char **argv) {
 				XSendEvent(display, window, 0, NoEventMask, &event);
 			}
 	} else if (strcmp(argv[1], "set") == 0) {
-		if (argc != 4) {
-			ERR("expected 'name' 'value' after 'set' subcommand");
+		if (strcmp(argv[2], "bgimg") == 0) {
+			Window window = get_program_window(display);
+			if (window == 0x0) {
+				ERR("get_program_window(): unable to find window");
+				XCloseDisplay(display);
+				exit(EXIT_FAILURE);
+			} else {
+				switch (argc) {
+					case 5:
+						short duration = (short)atoi(argv[4]);
+						XChangeProperty(display, window, ATOM_WALLPAPER_TRANSITION_DURATION, XA_CARDINAL, 16, PropModeReplace, (unsigned char *)&duration, 1);
+					case 4:
+						XChangeProperty(display, window, ATOM_WALLPAPER_PATH, XA_STRING, 8, PropModeReplace, (unsigned char *)argv[3], strlen(argv[3]));
+						break;
+					default:
+						ERR("expected 1 or 2 value(s) after 'set %s'", argv[2]);
+						XCloseDisplay(display);
+						exit(EXIT_FAILURE);
+				}
+				XCloseDisplay(display);
+				exit(EXIT_SUCCESS);
+			}
+		} else if (strcmp(argv[2], "struts") == 0) {
+			if (argc != 7) {
+				ERR("expected 4 values after 'set %s'", argv[2]);
+				XCloseDisplay(display);
+				exit(EXIT_FAILURE);
+			} else {
+				set_struts(display, atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), atoi(argv[6]));
+				XCloseDisplay(display);
+				exit(EXIT_SUCCESS);
+			}
+		} else if (argc != 4) {
+			ERR("expected 1 value after 'set %s'", argv[2]);
 			XCloseDisplay(display);
 			exit(EXIT_FAILURE);
 		}
@@ -60,38 +92,11 @@ int main(int argc, char **argv) {
 		else if (strcmp(argv[2], "right") == 0) set_struts(display, -1, atoi(argv[3]), -1, -1);
 		else if (strcmp(argv[2], "top") == 0) set_struts(display, -1, -1, atoi(argv[3]), -1);
 		else if (strcmp(argv[2], "bottom") == 0) set_struts(display, -1, -1, -1, atoi(argv[3]));
-		else if (strcmp(argv[2], "struts") == 0) {
-			char *strs[4] = { argv[3], NULL, NULL, NULL };
-			char *ptr = argv[3];
-			int strindex = 0;
-			while (*ptr != '\0') {
-				if (*ptr == ',') {
-					strindex++;
-					*ptr = '\0';
-					strs[strindex] = ptr + 1;
-				}
-				ptr++;
-			}
-			if (strs[3] == NULL || strs[3][0] == '\0') {
-				ERR("expected format 'left,right,top,bottom' for config variable 'struts'");
-				XCloseDisplay(display);
-				exit(EXIT_FAILURE);
-			} else {
-				set_struts(display, atoi(strs[0]), atoi(strs[1]), atoi(strs[2]), atoi(strs[3]));
-			}
-		} else if (strcmp(argv[2], "wallpaper") == 0) {
-			Window window = get_program_window(display);
-			if (window == 0x0) {
-				ERR("get_program_window(): unable to find window");
-				XCloseDisplay(display);
-				exit(EXIT_FAILURE);
-			} else XChangeProperty(display, window, ATOM_WALLPAPER_PATH, XA_STRING, 8, PropModeReplace, (unsigned char *)argv[3], strlen(argv[3]));
-		} else {
+		else {
 			ERR("unknown config key '%s'", argv[2]);
 			XCloseDisplay(display);
 			exit(EXIT_FAILURE);
 		}
-
 	} else {
 		ERR("unknown subcommand '%s'", argv[1]);
 	}

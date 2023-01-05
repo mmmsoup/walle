@@ -3,35 +3,50 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
 
+// try to mimic feh's '--bg-fill' option (i.e no horrible stretched or repeated textures)
+// TODO: I don't think this is quite right but I'll come back to it...
+int gl_set_texture_multiplier(gl_data_t *gl_data, int index) {
+	char uniform_name[] = { 't', 'e', 'x', index ? '1' : '0', 'm', 'u', 'l', 't', '\0' };
+	double width_ratio = (double)gl_data->textures[0].width/gl_data->window_width;
+	double height_ratio = (double)gl_data->textures[0].height/gl_data->window_height;
+	glUniform2f(glGetUniformLocation(gl_data->shader_program, uniform_name), width_ratio > height_ratio ? height_ratio/width_ratio : 1.0f, width_ratio > height_ratio ? 1.0f : width_ratio/height_ratio);
+	return EXIT_SUCCESS;
+}
+
 int gl_load_texture(gl_data_t *gl_data, int index, char *image_path) {
 	if (index != 0 && index != 1) {
 		ERR("gl_load_texture(): invalid index");
 		return EXIT_FAILURE;
 	}
 
-	int image_width, image_height, num_channels;
-	stbi_set_flip_vertically_on_load(1);
-	unsigned char *image_data = stbi_load(image_path, &image_width, &image_height, &num_channels, 0);
+	if (gl_data->textures[index].id != 0) glDeleteTextures(1, &(gl_data->textures[index].id));
 
-	glGenTextures(1, &(gl_data->textures[index]));
-	glBindTexture(GL_TEXTURE_2D, gl_data->textures[index]);
+	int num_channels;
+	stbi_set_flip_vertically_on_load(1);
+	unsigned char *image_data = stbi_load(image_path, &(gl_data->textures[index].width), &(gl_data->textures[index].height), &num_channels, 0);
+
+	glGenTextures(1, &(gl_data->textures[index].id));
+	glBindTexture(GL_TEXTURE_2D, gl_data->textures[index].id);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, image_width, image_height, 0, GL_RGB, GL_UNSIGNED_BYTE, image_data);
-	//glGenerateMipmap(GL_TEXTURE_2D);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, gl_data->textures[index].width, gl_data->textures[index].height, 0, GL_RGB, GL_UNSIGNED_BYTE, image_data);
+	glGenerateMipmap(GL_TEXTURE_2D);
 
 	stbi_image_free(image_data);
 
 	glUseProgram(gl_data->shader_program);
-	char uniform_name[] = { 't', 'e', 'x', 't', 'u', 'r', 'e', index ? '1' : '0', '\0' };
+	char uniform_name[] = { 't', 'e', 'x', index ? '1' : '0', '\0' };
 	glUniform1i(glGetUniformLocation(gl_data->shader_program, uniform_name), index);
+
+	gl_set_texture_multiplier(gl_data, index);
 
 	return EXIT_SUCCESS;
 }
 
 int gl_init(gl_data_t *gl_data, Display *display, XVisualInfo *visual_info, Window window) {
+	memset(gl_data, 0, sizeof(gl_data_t));
 	gl_data->display = display;
 	gl_data->window = window;
 	gl_data->mixing = 1.0f;
@@ -55,12 +70,14 @@ int gl_init(gl_data_t *gl_data, Display *display, XVisualInfo *visual_info, Wind
 	const GLchar *fragment_shader_source =
 		"#version 330 core\n"
 		"in vec2 texcoord;\n"
-		"uniform sampler2D texture0;\n"
-		"uniform sampler2D texture1;\n"
+		"uniform sampler2D tex0;\n"
+		"uniform vec2 tex0mult;\n"
+		"uniform sampler2D tex1;\n"
+		"uniform vec2 tex1mult;\n"
 		"uniform float mixing;\n"
 		"out vec4 FragColor;\n"
 		"void main() { \n"
-		"FragColor = mix(texture2D(texture0, texcoord), texture2D(texture1, texcoord), mixing);\n"
+		"FragColor = mix(texture2D(tex0, texcoord * tex0mult), texture2D(tex1, texcoord * tex1mult), mixing);\n"
 		"}";
 	GLint success = GL_TRUE;
 	GLsizei log_length;
@@ -126,31 +143,66 @@ int gl_init(gl_data_t *gl_data, Display *display, XVisualInfo *visual_info, Wind
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid *)(3 * sizeof(GLfloat)));
 	glEnableVertexAttribArray(1);
 
+	gl_load_texture(gl_data, 0, "/home/ben/Pictures/Wallpapers/coast.jpg");
+	gl_load_texture(gl_data, 1, "/home/ben/Pictures/Wallpapers/coast2.jpg");
+
+	gl_show_texture(gl_data, 0, 0);
+
+	return EXIT_SUCCESS;
+}
+
+// duration: in milliseconds
+int gl_show_texture(gl_data_t *gl_data, int index, double duration) {
+	if (duration == 0) {
+		gl_data->current_texture = index;
+		glUniform1f(glGetUniformLocation(gl_data->shader_program, "mixing"), index);
+	} else {
+		DEBUG("starting continuous rendering");
+		gl_data->texture_transition.duration = duration;
+		gl_data->texture_transition.active = 1;
+		gl_data->texture_transition.finish = (double)clock() / CLOCKS_PER_MSEC + gl_data->texture_transition.duration;
+	}
+
 	return EXIT_SUCCESS;
 }
 
 int gl_resize(gl_data_t *gl_data) {
 	Window root;
 	int x, y;
-	unsigned int width, height, border_width, depth;
-	XGetGeometry(gl_data->display, gl_data->window, &root, &x, &y, &width, &height, &border_width, &depth);
-	glViewport(0, 0, width, height);
+	unsigned int border_width, depth;
+	XGetGeometry(gl_data->display, gl_data->window, &root, &x, &y, &(gl_data->window_width), &(gl_data->window_height), &border_width, &depth);
+	glViewport(0, 0, gl_data->window_width, gl_data->window_height);
+
+	gl_set_texture_multiplier(gl_data, 0);
+	gl_set_texture_multiplier(gl_data, 1);
+
 	glFlush();
+
 	return EXIT_SUCCESS;
 }
 
 int gl_render(gl_data_t *gl_data) {
-	gl_data->mixing = 1.0f - gl_data->mixing;
-	glUniform1f(glGetUniformLocation(gl_data->shader_program, "mixing"), gl_data->mixing);
+	double current_time = (double)clock() / CLOCKS_PER_MSEC;
+
+	if (gl_data->texture_transition.active) {
+		if (gl_data->texture_transition.finish <= current_time) {
+			gl_data->texture_transition.active = 0;
+			gl_data->current_texture = 1 - gl_data->current_texture;
+			glUniform1f(glGetUniformLocation(gl_data->shader_program, "mixing"), gl_data->current_texture);
+			DEBUG("stopping continuous rendering");
+		} else {
+			glUniform1f(glGetUniformLocation(gl_data->shader_program, "mixing"), (1 - gl_data->current_texture) + (gl_data->current_texture ? 1 : -1) * (gl_data->texture_transition.finish-current_time)/gl_data->texture_transition.duration);
+		}
+	}
 
 	glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
 	glClearDepth(1.0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, gl_data->textures[0]);
+	glBindTexture(GL_TEXTURE_2D, gl_data->textures[0].id);
 	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, gl_data->textures[1]);
+	glBindTexture(GL_TEXTURE_2D, gl_data->textures[1].id);
 
 	glUseProgram(gl_data->shader_program);
 
