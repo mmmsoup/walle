@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <X11/Xlib.h>
 
 #include "config.h"
@@ -24,22 +25,47 @@ int main(int argc, char **argv) {
 		exit(EXIT_FAILURE);
 	}
 
+	int prog_return = EXIT_SUCCESS;
+
 	common_init(display);
 
-	if (argc == 1 || strcmp(argv[1], "daemon") == 0) {
+	if (argc == 1) {
+		ERR("no subcommand provided");
+		prog_return = EXIT_FAILURE;
+	} else if (argc == 2 && (strcmp(argv[1], "server") == 0 || strcmp(argv[1], "daemon") == 0)) {
 		if (get_program_window(display) == 0x0) {
-			window_run(display);
+			if (argv[1][0] == 'd') { // daemonise
+				int fildes[2];
+				if (pipe(fildes) == 0) {
+					int pid = fork();
+					if (pid > 0) { // parent
+						close(fildes[1]);
+						char buffer;
+						read(fildes[0], &buffer, 1);
+						exit(EXIT_SUCCESS);
+					} else if (pid == 0) { // child
+						close(fildes[0]);
+						window_run(display, fildes[1]);
+					} else { // error
+						ERR_ERRNO("fork()");
+						prog_return = EXIT_FAILURE;
+					}
+				} else {
+					ERR_ERRNO("pipe()");
+					prog_return = EXIT_FAILURE;
+				}
+			} else { // run in foreground
+				window_run(display, 0);
+			}
 		} else {
 			ERR("get_program_window(): instance already running");
-			XCloseDisplay(display);
-			exit(EXIT_FAILURE);
+			prog_return = EXIT_FAILURE;
 		}
 	} else if (strcmp(argv[1], "kill") == 0) {
 			Window window = get_program_window(display);
 			if (window == 0x0) {
 				ERR("get_program_window(): unable to find window");
-				XCloseDisplay(display);
-				exit(EXIT_FAILURE);
+				prog_return = EXIT_FAILURE;
 			} else {
 				XEvent event;
 				event.xclient.type         = ClientMessage;
@@ -54,8 +80,7 @@ int main(int argc, char **argv) {
 			Window window = get_program_window(display);
 			if (window == 0x0) {
 				ERR("get_program_window(): unable to find window");
-				XCloseDisplay(display);
-				exit(EXIT_FAILURE);
+				prog_return = EXIT_FAILURE;
 			} else {
 				switch (argc) {
 					case 5:
@@ -66,42 +91,33 @@ int main(int argc, char **argv) {
 						break;
 					default:
 						ERR("expected 1 or 2 value(s) after 'set %s'", argv[2]);
-						XCloseDisplay(display);
-						exit(EXIT_FAILURE);
+						prog_return = EXIT_FAILURE;
 				}
-				XCloseDisplay(display);
-				exit(EXIT_SUCCESS);
 			}
 		} else if (strcmp(argv[2], "struts") == 0) {
 			if (argc != 7) {
 				ERR("expected 4 values after 'set %s'", argv[2]);
-				XCloseDisplay(display);
-				exit(EXIT_FAILURE);
+				prog_return = EXIT_FAILURE;
 			} else {
 				set_struts(display, atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), atoi(argv[6]));
-				XCloseDisplay(display);
-				exit(EXIT_SUCCESS);
 			}
 		} else if (argc != 4) {
 			ERR("expected 1 value after 'set %s'", argv[2]);
-			XCloseDisplay(display);
-			exit(EXIT_FAILURE);
-		}
-
-		if (strcmp(argv[2], "left") == 0) set_struts(display, atoi(argv[3]), -1, -1, -1);
+			prog_return = EXIT_FAILURE;
+		} else if (strcmp(argv[2], "left") == 0) set_struts(display, atoi(argv[3]), -1, -1, -1);
 		else if (strcmp(argv[2], "right") == 0) set_struts(display, -1, atoi(argv[3]), -1, -1);
 		else if (strcmp(argv[2], "top") == 0) set_struts(display, -1, -1, atoi(argv[3]), -1);
 		else if (strcmp(argv[2], "bottom") == 0) set_struts(display, -1, -1, -1, atoi(argv[3]));
 		else {
 			ERR("unknown config key '%s'", argv[2]);
-			XCloseDisplay(display);
-			exit(EXIT_FAILURE);
+			prog_return = EXIT_FAILURE;
 		}
 	} else {
 		ERR("unknown subcommand '%s'", argv[1]);
+		prog_return = EXIT_FAILURE;
 	}
 
 	XCloseDisplay(display);
 
-	return EXIT_SUCCESS;
+	return prog_return;
 }

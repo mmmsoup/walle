@@ -5,8 +5,10 @@
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include <GL/glx.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <X11/Xatom.h>
 #include <X11/Xlib.h>
 
@@ -33,6 +35,6 @@ Window get_program_window(Display *);
 int set_net_wm_strut(Display *, Window, short, short, short, short);
 int set_net_wm_strut_partial(Display *, Window, short, short, short, short);
 
-int window_run(Display *);
+int window_run(Display *, int fd);
 
 #endif

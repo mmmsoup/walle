@@ -25,13 +25,26 @@ int gl_load_texture(gl_data_t *gl_data, int index, char *image_path) {
 	stbi_set_flip_vertically_on_load(1);
 	unsigned char *image_data = stbi_load(image_path, &(gl_data->textures[index].width), &(gl_data->textures[index].height), &num_channels, 0);
 
+	switch (num_channels) {
+		case 3:
+			num_channels = GL_RGB;
+			break;
+		case 4:
+			num_channels = GL_RGBA;
+			break;
+		default:
+			ERR("stbi_load(): invalid number of channels (%i)", num_channels);
+			stbi_image_free(image_data);
+			return EXIT_FAILURE;
+	}
+
 	glGenTextures(1, &(gl_data->textures[index].id));
 	glBindTexture(GL_TEXTURE_2D, gl_data->textures[index].id);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, gl_data->textures[index].width, gl_data->textures[index].height, 0, GL_RGB, GL_UNSIGNED_BYTE, image_data);
+	glTexImage2D(GL_TEXTURE_2D, 0, num_channels, gl_data->textures[index].width, gl_data->textures[index].height, 0, GL_RGB, GL_UNSIGNED_BYTE, image_data);
 	glGenerateMipmap(GL_TEXTURE_2D);
 
 	stbi_image_free(image_data);

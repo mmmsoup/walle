@@ -91,11 +91,13 @@ int set_net_wm_strut_partial(Display *display, Window window, short left, short 
 	int height = DisplayHeight(display, screen_no) - top - bottom;
 	XMoveResizeWindow(display, window, left, top, width, height);
 	XFlush(display);
-	DEBUG("struts set to (%i, %i, %i, %i), window moved to (%i, %i) & resized to %ix%ipx", left, right, top, bottom, left, top, width, height);
+	//DEBUG("struts set to (%i, %i, %i, %i), window moved to (%i, %i) & resized to %ix%ipx", left, right, top, bottom, left, top, width, height);
+	DEBUG("struts set to (%i, %i, %i, %i)", left, right, top, bottom);
 	return EXIT_SUCCESS;
 }
 
-int window_run(Display *display) {
+// fd: if should be daemonised, 'fd' will refer to the write end of a pipe, which will be written to when the window is created, so the parent process can return
+int window_run(Display *display, int fd) {
 	Screen *screen = DefaultScreenOfDisplay(display);
 	int screen_width = WidthOfScreen(screen);
 	int screen_height = HeightOfScreen(screen);
@@ -137,6 +139,14 @@ int window_run(Display *display) {
 
 	XMapWindow(display, window);
 	XFlush(display);
+
+	// tell parent process to return
+	if (fd != 0) {
+		write(fd, "e", 1);
+		close(fd);
+		freopen("/dev/null", "w", stdout);
+		freopen("/dev/null", "w", stderr);
+	}
 
 	XEvent event;
 	XWindowAttributes window_attributes;
