@@ -4,14 +4,13 @@ int WM_IS_BSPWM = 0;
 char *bspc;
 
 int bspwm_init() {
-	//printf("%s\n", (char*)xcb_get_property_value(xcb_get_property_reply(connection, xcb_get_property(connection, 0, screen->root, XCB_ATOM_WM_NAME, XCB_GET_PROPERTY_TYPE_ANY, 0, ~0), NULL)));
-
+	// potentially assuming this is a bad idea (??)
 	WM_IS_BSPWM = 1;
 	return find_in_path("bspc", &bspc);
 }
 
 int find_in_path(char *filename, char **filepath) {
-	char *pathstr = getenv("PATH");
+	char *pathstr = strdup(getenv("PATH"));
 	if (pathstr == NULL) {
 		ERR("PATH environment variable is empty");
 		return EXIT_FAILURE;

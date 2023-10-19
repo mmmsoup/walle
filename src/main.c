@@ -27,13 +27,18 @@ int main(int argc, char **argv) {
 
 	int prog_return = EXIT_SUCCESS;
 
-	common_init(display);
+	if (props_init(display) != EXIT_SUCCESS) {
+		XCloseDisplay(display);
+		exit(EXIT_FAILURE);
+	}
 
 	if (argc == 1) {
 		ERR("no subcommand provided");
 		prog_return = EXIT_FAILURE;
 	} else if (argc == 2 && (strcmp(argv[1], "server") == 0 || strcmp(argv[1], "daemon") == 0)) {
 		if (get_program_window(display) == 0x0) {
+			startup_properties_t startup_properties;
+
 			if (argv[1][0] == 'd') { // daemonise
 				int fildes[2];
 				if (pipe(fildes) == 0) {
@@ -45,7 +50,7 @@ int main(int argc, char **argv) {
 						exit(EXIT_SUCCESS);
 					} else if (pid == 0) { // child
 						close(fildes[0]);
-						window_run(display, fildes[1]);
+						prog_return = window_run(display, startup_properties, fildes[1]);
 					} else { // error
 						ERR_ERRNO("fork()");
 						prog_return = EXIT_FAILURE;
@@ -55,7 +60,7 @@ int main(int argc, char **argv) {
 					prog_return = EXIT_FAILURE;
 				}
 			} else { // run in foreground
-				window_run(display, 0);
+				window_run(display, startup_properties, 0);
 			}
 		} else {
 			ERR("get_program_window(): instance already running");

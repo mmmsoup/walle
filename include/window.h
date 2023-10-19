@@ -28,13 +28,18 @@ extern Atom ATOM_NET_WM_STRUT_PARTIAL;
 extern Atom ATOM_WALLPAPER_PATH;
 extern Atom ATOM_WALLPAPER_TRANSITION_DURATION;
 
-int common_init(Display *);
+typedef struct {
+	char *image_path;
+	int left, right, top, bottom;
+} startup_properties_t;
+
+int props_init(Display *);
 
 Window get_program_window(Display *);
 
 int set_net_wm_strut(Display *, Window, short, short, short, short);
 int set_net_wm_strut_partial(Display *, Window, short, short, short, short);
 
-int window_run(Display *, int fd);
+int window_run(Display *, startup_properties_t, int fd);
 
 #endif

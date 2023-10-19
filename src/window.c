@@ -9,7 +9,7 @@ Atom ATOM_NET_WM_STRUT_PARTIAL;
 Atom ATOM_WALLPAPER_PATH;
 Atom ATOM_WALLPAPER_TRANSITION_DURATION;
 
-int common_init(Display *display) {
+int props_init(Display *display) {
 	ATOM_NET_WM_STRUT = XInternAtom(display, "_NET_WM_STRUT", 0);
 	ATOM_NET_WM_STRUT_PARTIAL = XInternAtom(display, "_NET_WM_STRUT_PARTIAL", 0);
 
@@ -19,9 +19,46 @@ int common_init(Display *display) {
 	ATOM_WALLPAPER_PATH = XInternAtom(display, WALLPAPER_PATH_ATOM_NAME, 0);
 	ATOM_WALLPAPER_TRANSITION_DURATION = XInternAtom(display, WALLPAPER_TRANSITION_DURATION_ATOM_NAME, 0);
 
-	bspwm_init();
-
 	return EXIT_SUCCESS;
+}
+
+static char *xevent_name(int xevent_type) {
+	switch (xevent_type) {
+		case KeyPress: return "KeyPress";
+		case KeyRelease: return "KeyRelease";
+		case ButtonPress: return "ButtonPress";
+		case ButtonRelease: return "ButtonRelease";
+		case MotionNotify: return "MotionNotify";
+		case EnterNotify: return "EnterNotify";
+		case LeaveNotify: return "LeaveNotify";
+		case FocusIn: return "FocusIn";
+		case FocusOut: return "FocusOut";
+		case Expose: return "Expose";
+		case GraphicsExpose: return "GraphicsExpose";
+		case NoExpose: return "NoExpose";
+		case VisibilityNotify: return "VisibilityNotify";
+		case CreateNotify: return "CreateNotify";
+		case DestroyNotify: return "DestroyNotify";
+		case UnmapNotify: return "UnmapNotify";
+		case MapNotify: return "MapNotify";
+		case MapRequest: return "MapRequest";
+		case ReparentNotify: return "ReparentNotify";
+		case ConfigureNotify: return "ConfigureNotify";
+		case GravityNotify: return "GravityNotify";
+		case ResizeRequest: return "ResizeRequest";
+		case ConfigureRequest: return "ConfigureRequest";
+		case CirculateNotify: return "CirculateNotify";
+		case CirculateRequest: return "CirculateRequest";
+		case PropertyNotify: return "PropertyNotify";
+		case SelectionClear: return "SelectionClear";
+		case SelectionRequest: return "SelectionRequest";
+		case SelectionNotify: return "SelectionNotify";
+		case ColormapNotify: return "ColormapNotify";
+		case ClientMessage: return "ClientMessage";
+		case MappingNotify: return "MappingNotify";
+		case KeymapNotify: return "KeymapNotify";
+		default: return "<unknown>";
+	}
 }
 
 Window get_program_window(Display *display) {
@@ -71,7 +108,7 @@ int set_net_wm_strut(Display *display, Window window, short left, short right, s
 		new_struts[0] = left == -1 ? old_struts[0] : left;
 		new_struts[1] = right == -1 ? old_struts[1] : right;
 		new_struts[2] = top == -1 ? old_struts[2] : top;
-		new_struts[3] = bottom == -1 ? old_struts[0] : bottom;
+		new_struts[3] = bottom == -1 ? old_struts[3] : bottom;
 	}
 	XFree(old_struts);
 	XChangeProperty(display, window, ATOM_NET_WM_STRUT, XA_CARDINAL, 16, PropModeReplace, (unsigned char *)new_struts, 4);
@@ -80,24 +117,47 @@ int set_net_wm_strut(Display *display, Window window, short left, short right, s
 }
 
 int set_net_wm_strut_partial(Display *display, Window window, short left, short right, short top, short bottom) {
+#ifdef ENABLE_RESIZE_HACK
+	Atom type;
+	int format;
+	unsigned long nitems, bytes_after;
+	short *old_struts;
+	XGetWindowProperty(display, window, ATOM_NET_WM_STRUT_PARTIAL, 0L, 4L, 0, XA_CARDINAL, &type, &format, &nitems, &bytes_after, (unsigned char **)&old_struts);
+#endif
+
+	short struts[] = { left, right, top, bottom, 0, 0, 0, 0, 0, 0, 0, 0};
+	XChangeProperty(display, window, ATOM_NET_WM_STRUT_PARTIAL, XA_CARDINAL, 16, PropModeReplace, (unsigned char *)struts, 12);
+	XFlush(display);
+
 	if (WM_IS_BSPWM) bspwm_set_struts(left, right, top, bottom);
-	else {
-		short struts[] = { left, right, top, bottom, 0, 0, 0, 0, 0, 0, 0, 0};
-		XChangeProperty(display, window, ATOM_NET_WM_STRUT_PARTIAL, XA_CARDINAL, 16, PropModeReplace, (unsigned char *)struts, 12);
-		XFlush(display);
-	}
+
+	DEBUG("struts set to (%i, %i, %i, %i)", left, right, top, bottom);
+
 	int screen_no = XDefaultScreen(display);
 	int width = DisplayWidth(display, screen_no) - left - right;
 	int height = DisplayHeight(display, screen_no) - top - bottom;
 	XMoveResizeWindow(display, window, left, top, width, height);
+	DEBUG("moved to (%i, %i)", left, top);
+	DEBUG("resized to %ix%ipx", width, height);
 	XFlush(display);
 	//DEBUG("struts set to (%i, %i, %i, %i), window moved to (%i, %i) & resized to %ix%ipx", left, right, top, bottom, left, top, width, height);
-	DEBUG("struts set to (%i, %i, %i, %i)", left, right, top, bottom);
+	
+#ifdef ENABLE_RESIZE_HACK
+	if (nitems >= 4) {
+		if (old_struts[0] != left || old_struts[1] != right) {
+			system(RESIZE_HACK_CMD);
+		}
+	}
+	if (nitems != 0) XFree(old_struts);
+#endif
+	
 	return EXIT_SUCCESS;
 }
 
 // fd: if should be daemonised, 'fd' will refer to the write end of a pipe, which will be written to when the window is created, so the parent process can return
-int window_run(Display *display, int fd) {
+int window_run(Display *display, startup_properties_t startup_properties, int fd) {
+	if (bspwm_init() != EXIT_SUCCESS) return EXIT_FAILURE;
+
 	Screen *screen = DefaultScreenOfDisplay(display);
 	int screen_width = WidthOfScreen(screen);
 	int screen_height = HeightOfScreen(screen);
@@ -118,11 +178,13 @@ int window_run(Display *display, int fd) {
 
 	Colormap colourmap = XCreateColormap(display, root, visual_info->visual, AllocNone);
 	long event_mask = StructureNotifyMask | ExposureMask | PropertyChangeMask;
+	unsigned long value_mask = CWColormap | CWEventMask | CWBitGravity;
 	XSetWindowAttributes window_attrs = {
 		.colormap = colourmap,
-		.event_mask = event_mask
+		.event_mask = event_mask,
+		.bit_gravity = CenterGravity
 	};
-    Window window = XCreateWindow(display, root, 0, 0, screen_width, screen_height, 0, visual_info->depth, InputOutput, visual_info->visual, CWColormap | CWEventMask, &window_attrs);
+    Window window = XCreateWindow(display, root, 0, 0, screen_width, screen_height, 0, visual_info->depth, InputOutput, visual_info->visual, value_mask, &window_attrs);
 
 	XStoreName(display, window, WINDOW_NAME);
 	XClassHint *class_hint = XAllocClassHint();
@@ -159,11 +221,12 @@ int window_run(Display *display, int fd) {
 		if (gl_data.texture_transition.active) {
 			if (!XCheckWindowEvent(display, window, event_mask, &event)) continue;
 		} else XNextEvent(display, &event);
+
+		DEBUG("%s event received", xevent_name(event.type));
 			
 		switch (event.type) {
 			case ClientMessage:
 				if (event.xclient.message_type == ATOM_WM_PROTOCOLS && event.xclient.data.l[0] == ATOM_WM_DELETE_WINDOW) {
-					DEBUG("h");
 					set_net_wm_strut_partial(display, window, 0, 0, 0, 0);
 					//glXMakeCurrent(display, None, NULL);
 					//glXDestroyContext(display, glx_context);
@@ -172,10 +235,9 @@ int window_run(Display *display, int fd) {
 
 					goto FINISH;
 				}
-			case ConfigureNotify:
-				gl_resize(&gl_data);
-				break;
 			case Expose:
+				if (event.xexpose.count != 0) break;
+			case ConfigureNotify:
 				gl_resize(&gl_data);
 				break;
 			case PropertyNotify:
@@ -194,9 +256,10 @@ int window_run(Display *display, int fd) {
 					XGetWindowProperty(display, window, ATOM_WALLPAPER_PATH, 0L, 0L, 0, XA_STRING, &type, &format, &nitems, &bytes_after, &data);
 					XGetWindowProperty(display, window, ATOM_WALLPAPER_PATH, 0L, bytes_after/4+1, 0, XA_STRING, &type, &format, &nitems, &bytes_after, &data);
 
-					gl_load_texture(&gl_data, 1 - gl_data.current_texture, (char*)data);
-					DEBUG("setting wallpaper to '%s' (transition %ims)", data, transition_duration);
-					gl_show_texture(&gl_data, 1 - gl_data.current_texture, transition_duration);
+					if (gl_load_texture(&gl_data, 1 - gl_data.current_texture, (char*)data) == EXIT_SUCCESS) {
+						DEBUG("setting wallpaper to '%s' (transition %ims)", data, transition_duration);
+						gl_show_texture(&gl_data, 1 - gl_data.current_texture, transition_duration);
+					}
 
 					XFree(data);
 				} else if (event.xproperty.atom == ATOM_NET_WM_STRUT) {

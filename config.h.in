@@ -5,6 +5,11 @@
 #define PROJECT_NAME_CAPS "${PROJECT_NAME_CAPS}"
 #define BUILD_TYPE "${CMAKE_BUILD_TYPE}"
 
+// hacky way to try to fix problem where sometimes window does not resize for the user when it should
+// #define ENABLE_RESIZE_HACK 1
+// #define RESIZE_HACK_CMD "bspc rule -a \\* -o hidden=on && $TERMINAL -e sh -c exit"
+// #define RESIZE_HACK_CMD "n=$(/sbin/wmctrl -d | /sbin/wc -l); d=$(/sbin/wmctrl -d | /sbin/grep '\\*' | /sbin/awk '{print $1}'); /sbin/wmctrl -s $((n - d)); /sbin/wmctrl -s $d"
+
 #define WINDOW_NAME PROJECT_NAME
 #define WINDOW_CLASS PROJECT_NAME
 #define WINDOW_TYPE "_NET_WM_WINDOW_TYPE_DESKTOP"
