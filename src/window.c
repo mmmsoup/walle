@@ -212,8 +212,6 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 
 	XEvent event;
 	XWindowAttributes window_attributes;
-	int rightpanel = 200;
-	int toppanel = 40;
 	while (1) {
 		gl_render(&gl_data);
 		usleep(1000);
