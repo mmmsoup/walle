@@ -28,6 +28,7 @@ int main(int argc, char **argv) {
 	int prog_return = EXIT_SUCCESS;
 
 	if (props_init(display) != EXIT_SUCCESS) {
+		ERR("props_init(): unable to initialise atoms");
 		XCloseDisplay(display);
 		exit(EXIT_FAILURE);
 	}
@@ -116,6 +117,59 @@ int main(int argc, char **argv) {
 		else {
 			ERR("unknown config key '%s'", argv[2]);
 			prog_return = EXIT_FAILURE;
+		}
+	} else if (strcmp(argv[1], "subscribe") == 0) {
+		enum atoms {
+			struts		= (1 << 0),
+			wallpaper	= (1 << 1)
+		};
+		short subscribed_atoms = 0;
+		if (argc > 2) {
+			for (int i = 2; i < argc; i++) {
+				if (strcmp(argv[i], "struts") == 0) subscribed_atoms |= struts;
+				else if (strcmp(argv[i], "wallpaper") == 0) subscribed_atoms |= wallpaper;
+			}
+		} else subscribed_atoms = 0xff;
+		Window window = get_program_window(display);
+		if (window == 0x0) {
+			ERR("get_program_window(): unable to find window");
+			XCloseDisplay(display);
+			exit(EXIT_FAILURE);
+		}
+		XSelectInput(display, window, PropertyChangeMask);
+		if (props_init(display) != EXIT_SUCCESS) {
+			ERR("props_init(): unable to initialise atoms");
+			XCloseDisplay(display);
+			exit(EXIT_FAILURE);
+		}
+		XEvent event;
+		while (1) {
+			XNextEvent(display, &event);
+			if (event.type == PropertyNotify) {
+				short changed_atom = 0;
+				if (event.xproperty.atom == ATOM_NET_WM_STRUT) changed_atom = struts;
+				else if (event.xproperty.atom == ATOM_WALLPAPER_PATH) changed_atom = wallpaper;
+				
+				if (!(subscribed_atoms & changed_atom)) continue;
+
+				Atom type;
+				int format;
+				unsigned long nitems, bytes_after;
+				unsigned char *data;
+				switch (changed_atom) {
+					case struts:
+						XGetWindowProperty(display, window, ATOM_NET_WM_STRUT, 0L, 12L, 0, XA_CARDINAL, &type, &format, &nitems, &bytes_after, &data);
+						printf("struts %i %i %i %i\n", ((short*)data)[0], ((short*)data)[1], ((short*)data)[2], ((short*)data)[3]);
+						break;
+					case wallpaper:
+						XGetWindowProperty(display, window, ATOM_WALLPAPER_PATH, 0L, 0L, 0, XA_STRING, &type, &format, &nitems, &bytes_after, &data);
+						XGetWindowProperty(display, window, ATOM_WALLPAPER_PATH, 0L, bytes_after/4+1, 0, XA_STRING, &type, &format, &nitems, &bytes_after, &data);
+						printf("wallpaper %s\n", data);
+						break;
+					case 0:
+						break;
+				}
+			}
 		}
 	} else {
 		ERR("unknown subcommand '%s'", argv[1]);
