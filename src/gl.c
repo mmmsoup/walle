@@ -23,19 +23,10 @@ int gl_load_texture(gl_data_t *gl_data, int index, char *image_path) {
 
 	int num_channels;
 	stbi_set_flip_vertically_on_load(1);
-	unsigned char *image_data = stbi_load(image_path, &(gl_data->textures[index].width), &(gl_data->textures[index].height), &num_channels, 0);
-
-	switch (num_channels) {
-		case 3:
-			num_channels = GL_RGB;
-			break;
-		case 4:
-			num_channels = GL_RGBA;
-			break;
-		default:
-			ERR("stbi_load(): invalid number of channels (%i)", num_channels);
-			stbi_image_free(image_data);
-			return EXIT_FAILURE;
+	unsigned char *image_data = stbi_load(image_path, &(gl_data->textures[index].width), &(gl_data->textures[index].height), &num_channels, 3);
+	if (image_data == NULL) {
+		ERR("stbi_load(): failure of some description?");
+		return EXIT_FAILURE;
 	}
 
 	glGenTextures(1, &(gl_data->textures[index].id));

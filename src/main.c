@@ -97,6 +97,7 @@ int main(int argc, char **argv) {
 					default:
 						ERR("expected 1 or 2 value(s) after 'set %s'", argv[2]);
 						prog_return = EXIT_FAILURE;
+						break;
 				}
 			}
 		} else if (strcmp(argv[2], "struts") == 0) {
