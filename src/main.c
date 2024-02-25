@@ -46,9 +46,8 @@ int main(int argc, char **argv) {
 					int pid = fork();
 					if (pid > 0) { // parent
 						close(fildes[1]);
-						char buffer;
-						read(fildes[0], &buffer, 1);
-						exit(EXIT_SUCCESS);
+						read(fildes[0], (char*)&prog_return, sizeof(int));
+						return prog_return;
 					} else if (pid == 0) { // child
 						close(fildes[0]);
 						prog_return = window_run(display, startup_properties, fildes[1]);
@@ -61,7 +60,7 @@ int main(int argc, char **argv) {
 					prog_return = EXIT_FAILURE;
 				}
 			} else { // run in foreground
-				window_run(display, startup_properties, 0);
+				prog_return = window_run(display, startup_properties, 0);
 			}
 		} else {
 			ERR("get_program_window(): instance already running");
@@ -121,13 +120,17 @@ int main(int argc, char **argv) {
 	} else if (strcmp(argv[1], "subscribe") == 0) {
 		enum atoms {
 			struts		= (1 << 0),
-			wallpaper	= (1 << 1)
+			visibility	= (1 << 1),
+			wallpaper	= (1 << 2),
+			workspace	= (1 << 3)
 		};
 		short subscribed_atoms = 0;
 		if (argc > 2) {
 			for (int i = 2; i < argc; i++) {
 				if (strcmp(argv[i], "struts") == 0) subscribed_atoms |= struts;
+				else if (strcmp(argv[i], "visibility") == 0) subscribed_atoms |= visibility;
 				else if (strcmp(argv[i], "wallpaper") == 0) subscribed_atoms |= wallpaper;
+				else if (strcmp(argv[i], "workspace") == 0) subscribed_atoms |= workspace;
 			}
 		} else subscribed_atoms = 0xff;
 		Window window = get_program_window(display);
@@ -148,7 +151,9 @@ int main(int argc, char **argv) {
 			if (event.type == PropertyNotify) {
 				short changed_atom = 0;
 				if (event.xproperty.atom == ATOM_NET_WM_STRUT) changed_atom = struts;
+				else if (event.xproperty.atom == ATOM_WINDOW_VISIBLE) changed_atom = visibility;
 				else if (event.xproperty.atom == ATOM_WALLPAPER_PATH) changed_atom = wallpaper;
+				else if (event.xproperty.atom == ATOM_CURRENT_WORKSPACE) changed_atom = workspace;
 				
 				if (!(subscribed_atoms & changed_atom)) continue;
 
@@ -156,19 +161,22 @@ int main(int argc, char **argv) {
 				int format;
 				unsigned long nitems, bytes_after;
 				unsigned char *data;
-				switch (changed_atom) {
-					case struts:
-						XGetWindowProperty(display, window, ATOM_NET_WM_STRUT, 0L, 12L, 0, XA_CARDINAL, &type, &format, &nitems, &bytes_after, &data);
-						printf("struts %i %i %i %i\n", ((short*)data)[0], ((short*)data)[1], ((short*)data)[2], ((short*)data)[3]);
-						break;
-					case wallpaper:
-						XGetWindowProperty(display, window, ATOM_WALLPAPER_PATH, 0L, 0L, 0, XA_STRING, &type, &format, &nitems, &bytes_after, &data);
-						XGetWindowProperty(display, window, ATOM_WALLPAPER_PATH, 0L, bytes_after/4+1, 0, XA_STRING, &type, &format, &nitems, &bytes_after, &data);
-						printf("wallpaper %s\n", data);
-						break;
-					case 0:
-						break;
+				if (changed_atom == struts) {
+					XGetWindowProperty(display, window, ATOM_NET_WM_STRUT, 0L, 12L, 0, XA_CARDINAL, &type, &format, &nitems, &bytes_after, &data);
+					printf("struts %i %i %i %i\n", ((short*)data)[0], ((short*)data)[1], ((short*)data)[2], ((short*)data)[3]);
+				} else if (changed_atom == visibility) {
+					XGetWindowProperty(display, window, ATOM_WINDOW_VISIBLE, 0L, 1L, 0, XA_CARDINAL, &type, &format, &nitems, &bytes_after, &data);
+					printf("visibility %i\n", *data);
+				} else if (changed_atom == wallpaper) {
+					XGetWindowProperty(display, window, ATOM_WALLPAPER_PATH, 0L, 0L, 0, XA_STRING, &type, &format, &nitems, &bytes_after, &data);
+					XGetWindowProperty(display, window, ATOM_WALLPAPER_PATH, 0L, bytes_after/4+1, 0, XA_STRING, &type, &format, &nitems, &bytes_after, &data);
+					printf("wallpaper %s\n", data);
+				} else if (changed_atom == workspace) {
+					XGetWindowProperty(display, window, ATOM_CURRENT_WORKSPACE, 0L, 1L, 0, XA_CARDINAL, &type, &format, &nitems, &bytes_after, &data);
+					printf("workspace %i\n", *data);
 				}
+
+				fflush(stdout);
 			}
 		}
 	} else {

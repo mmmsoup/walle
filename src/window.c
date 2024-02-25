@@ -9,6 +9,9 @@ Atom ATOM_NET_WM_STRUT_PARTIAL;
 Atom ATOM_WALLPAPER_PATH;
 Atom ATOM_WALLPAPER_TRANSITION_DURATION;
 
+Atom ATOM_CURRENT_WORKSPACE;
+Atom ATOM_WINDOW_VISIBLE;
+
 int props_init(Display *display) {
 	ATOM_NET_WM_STRUT = XInternAtom(display, "_NET_WM_STRUT", 0);
 	ATOM_NET_WM_STRUT_PARTIAL = XInternAtom(display, "_NET_WM_STRUT_PARTIAL", 0);
@@ -18,6 +21,9 @@ int props_init(Display *display) {
 
 	ATOM_WALLPAPER_PATH = XInternAtom(display, WALLPAPER_PATH_ATOM_NAME, 0);
 	ATOM_WALLPAPER_TRANSITION_DURATION = XInternAtom(display, WALLPAPER_TRANSITION_DURATION_ATOM_NAME, 0);
+
+	ATOM_CURRENT_WORKSPACE = XInternAtom(display, CURRENT_WORKSPACE_ATOM_NAME, 0);
+	ATOM_WINDOW_VISIBLE = XInternAtom(display, WINDOW_VISIBLE_ATOM_NAME, 0);
 
 	return EXIT_SUCCESS;
 }
@@ -154,15 +160,28 @@ int set_net_wm_strut_partial(Display *display, Window window, short left, short 
 	return EXIT_SUCCESS;
 }
 
+// pass exit code back to parent process (if daemonised) and return exit code (if not daemonised)
+#define WR_RET(code) { \
+	if (fd != 0) { \
+		int c = code; \
+		write(fd, (char*)&c, sizeof(int)); \
+		close(fd); \
+	} \
+	return code; \
+}
+
 // fd: if should be daemonised, 'fd' will refer to the write end of a pipe, which will be written to when the window is created, so the parent process can return
 int window_run(Display *display, startup_properties_t startup_properties, int fd) {
-	if (bspwm_init() != EXIT_SUCCESS) return EXIT_FAILURE;
+	if (bspwm_init() != EXIT_SUCCESS) WR_RET(EXIT_FAILURE);
 
 	Screen *screen = DefaultScreenOfDisplay(display);
 	int screen_width = WidthOfScreen(screen);
 	int screen_height = HeightOfScreen(screen);
+	short struts[4] = { 0, 0, 0, 0 };
+	int maximised_width = screen_width;
+	int maximised_height = screen_height;
 
-	Window root = DefaultRootWindow(display);
+	Window root_win = DefaultRootWindow(display);
 
 	GLint visual_attrs[] = {
 		GLX_RGBA,
@@ -173,10 +192,10 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 	XVisualInfo *visual_info = glXChooseVisual(display, 0, visual_attrs);
 	if (visual_info == NULL) {
 		ERR("glXChooseVisual(): no appropriate visual found");
-		return EXIT_FAILURE;
+		WR_RET(EXIT_FAILURE);
 	}
 
-	Colormap colourmap = XCreateColormap(display, root, visual_info->visual, AllocNone);
+	Colormap colourmap = XCreateColormap(display, root_win, visual_info->visual, AllocNone);
 	long event_mask = StructureNotifyMask | ExposureMask | PropertyChangeMask;
 	unsigned long value_mask = CWColormap | CWEventMask | CWBitGravity;
 	XSetWindowAttributes window_attrs = {
@@ -184,7 +203,7 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 		.event_mask = event_mask,
 		.bit_gravity = CenterGravity
 	};
-    Window window = XCreateWindow(display, root, 0, 0, screen_width, screen_height, 0, visual_info->depth, InputOutput, visual_info->visual, value_mask, &window_attrs);
+    Window window = XCreateWindow(display, root_win, 0, 0, screen_width, screen_height, 0, visual_info->depth, InputOutput, visual_info->visual, value_mask, &window_attrs);
 
 	XStoreName(display, window, WINDOW_NAME);
 	XClassHint *class_hint = XAllocClassHint();
@@ -202,75 +221,210 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 	XMapWindow(display, window);
 	XFlush(display);
 
-	// tell parent process to return
+	// get new connection for monitoring visibility of wallpaper window
+	Display *dpy_for_root = XOpenDisplay(NULL);
+	if (display == NULL) {
+		ERR("XOpenDisplay(): unable to open display");
+		WR_RET(EXIT_FAILURE);
+	}
+	XSelectInput(dpy_for_root, root_win, SubstructureNotifyMask | PropertyChangeMask);
+	Atom ATOM_NET_CURRENT_DESKTOP = XInternAtom(dpy_for_root, "_NET_CURRENT_DESKTOP", 0);
+	Atom ATOM_NET_WM_DESKTOP = XInternAtom(dpy_for_root, "_NET_WM_DESKTOP", 0);
+	struct pollfd pollfds[2] = {
+		{
+			.fd = ConnectionNumber(display),
+			.events = POLLIN,
+			.revents = 0
+		},
+		{
+			.fd = ConnectionNumber(dpy_for_root),
+			.events = POLLIN,
+			.revents = 0
+		}
+	};
+	window_list_t obscuring_windows;
+	window_list_new(&obscuring_windows);
+	unsigned int current_desktop = 0;
+
+	// tell parent process to return: DO NOT use WR_RET() after this
 	if (fd != 0) {
-		write(fd, "e", 1);
+		int code = EXIT_SUCCESS;
+		write(fd, (char*)&code, sizeof(int));
 		close(fd);
 		freopen("/dev/null", "w", stdout);
 		freopen("/dev/null", "w", stderr);
 	}
 
+	// for subsequent `XGetWindowProperty's
+	Atom type;
+	int format;
+	unsigned long nitems, bytes_after;
+	unsigned char *data;
+
 	XEvent event;
+	int pollret = 0;
 	XWindowAttributes window_attributes;
 	while (1) {
 		gl_render(&gl_data);
 		usleep(1000);
 
-		if (gl_data.texture_transition.active) {
-			if (!XCheckWindowEvent(display, window, event_mask, &event)) continue;
-		} else XNextEvent(display, &event);
+		// block indefinitely if not animating wallpaper, otherwise just check with timeout 0 for events
+		pollret = poll(pollfds, 2, gl_data.texture_transition.active - 1);
+		if (pollret == 0) continue;
+		else if (pollret < 0) {
+			ERR_ERRNO("poll()");
+			set_net_wm_strut_partial(display, window, 0, 0, 0, 0);
+			XDestroyWindow(display, window);
+			goto FINISH;
+		}
 
-		DEBUG("%s event received", xevent_name(event.type));
+		// monitor events for wallpaper window
+		while (XPending(display)) {
+			XNextEvent(display, &event);
+
+			DEBUG("%s event received", xevent_name(event.type));
 			
-		switch (event.type) {
-			case ClientMessage:
-				if (event.xclient.message_type == ATOM_WM_PROTOCOLS && event.xclient.data.l[0] == ATOM_WM_DELETE_WINDOW) {
-					set_net_wm_strut_partial(display, window, 0, 0, 0, 0);
-					//glXMakeCurrent(display, None, NULL);
-					//glXDestroyContext(display, glx_context);
-					XDestroyWindow(display, window);
-					XCloseDisplay(display);
+			switch (event.type) {
+				case ClientMessage:
+					if (event.xclient.message_type == ATOM_WM_PROTOCOLS && event.xclient.data.l[0] == ATOM_WM_DELETE_WINDOW) {
+						set_net_wm_strut_partial(display, window, 0, 0, 0, 0);
+						//glXMakeCurrent(display, None, NULL);
+						//glXDestroyContext(display, glx_context);
+						XDestroyWindow(display, window);
+						DEBUG("killed");
+						goto FINISH;
+					}
+				case Expose:
+					if (event.xexpose.count != 0) break;
+				case ConfigureNotify:
+					gl_resize(&gl_data);
+					break;
+				case PropertyNotify:
+					if (event.xproperty.atom == ATOM_WALLPAPER_PATH) {
+						short transition_duration = DEFAULT_WALLPAPER_TRANSITION_DURATION;
+						XGetWindowProperty(display, window, ATOM_WALLPAPER_TRANSITION_DURATION, 0L, 1L, 1, XA_CARDINAL, &type, &format, &nitems, &bytes_after, &data);
+						if (nitems == 1) {
+							transition_duration = *(short*)data;
+							XFree(data);
+						}
 
-					goto FINISH;
-				}
-			case Expose:
-				if (event.xexpose.count != 0) break;
-			case ConfigureNotify:
-				gl_resize(&gl_data);
-				break;
-			case PropertyNotify:
-				Atom type;
-				int format;
-				unsigned long nitems, bytes_after;
-				unsigned char *data;
-				if (event.xproperty.atom == ATOM_WALLPAPER_PATH) {
-					short transition_duration = DEFAULT_WALLPAPER_TRANSITION_DURATION;
-					XGetWindowProperty(display, window, ATOM_WALLPAPER_TRANSITION_DURATION, 0L, 1L, 1, XA_CARDINAL, &type, &format, &nitems, &bytes_after, &data);
-					if (nitems == 1) {
-						transition_duration = *(short*)data;
+						XGetWindowProperty(display, window, ATOM_WALLPAPER_PATH, 0L, 0L, 0, XA_STRING, &type, &format, &nitems, &bytes_after, &data);
+						XGetWindowProperty(display, window, ATOM_WALLPAPER_PATH, 0L, bytes_after/4+1, 0, XA_STRING, &type, &format, &nitems, &bytes_after, &data);
+
+						if (gl_load_texture(&gl_data, 1 - gl_data.current_texture, (char*)data) == EXIT_SUCCESS) {
+							DEBUG("setting wallpaper to '%s' (transition %ims)", data, transition_duration);
+							gl_show_texture(&gl_data, 1 - gl_data.current_texture, transition_duration);
+						}
+
+						XFree(data);
+					} else if (event.xproperty.atom == ATOM_NET_WM_STRUT) {
+						XGetWindowProperty(display, window, ATOM_NET_WM_STRUT, 0L, 12L, 0, XA_CARDINAL, &type, &format, &nitems, &bytes_after, &data);
+						memcpy(struts, data, 4*sizeof(short));
+						set_net_wm_strut_partial(display, window, struts[0], struts[1], struts[2], struts[3]);
+						maximised_width = screen_width - struts[0] - struts[1];
+						maximised_height = screen_height - struts[2] - struts[3];
 						XFree(data);
 					}
+					break;
+				default:
+					break;
+			}
+		}
 
-					XGetWindowProperty(display, window, ATOM_WALLPAPER_PATH, 0L, 0L, 0, XA_STRING, &type, &format, &nitems, &bytes_after, &data);
-					XGetWindowProperty(display, window, ATOM_WALLPAPER_PATH, 0L, bytes_after/4+1, 0, XA_STRING, &type, &format, &nitems, &bytes_after, &data);
+		// monitor events for root window
+		short visible = obscuring_windows.length == 0;
+		while (XPending(dpy_for_root)) {
+			XNextEvent(dpy_for_root, &event);
 
-					if (gl_load_texture(&gl_data, 1 - gl_data.current_texture, (char*)data) == EXIT_SUCCESS) {
-						DEBUG("setting wallpaper to '%s' (transition %ims)", data, transition_duration);
-						gl_show_texture(&gl_data, 1 - gl_data.current_texture, transition_duration);
+			DEBUG("%s event received", xevent_name(event.type));
+
+			switch (event.type) {
+				case ConfigureNotify:
+					if (((event.xconfigure.x == 0 && event.xconfigure.y == 0 && event.xconfigure.width == screen_width && event.xconfigure.height == screen_height) || (event.xconfigure.x == struts[0] && event.xconfigure.y == struts[2] && event.xconfigure.width == maximised_width && event.xconfigure.height == maximised_height)) && (event.xconfigure.window != window)) {
+						/* checking workspace of window in question fixes an issue arising from fullscreen windows on other workspaces being reconfigured */
+						XGetWindowProperty(dpy_for_root, event.xconfigure.window, ATOM_NET_WM_DESKTOP, 0L, 1L, 0, XA_CARDINAL, &type, &format, &nitems, &bytes_after, &data);
+						if (*(uint32_t*)data == current_desktop) {
+							window_list_add(&obscuring_windows, event.xconfigure.window);
+						}
+						XFree(data);
+					} else window_list_remove(&obscuring_windows, event.xconfigure.window);
+					break;
+				case DestroyNotify:
+					window_list_remove(&obscuring_windows, event.xdestroywindow.window);
+					break;
+				case MapNotify:
+					Window r;
+					int x, y;
+					unsigned int w, h, bw, d;
+					XGetGeometry(dpy_for_root, event.xmap.window, &r, &x, &y, &w, &h, &bw, &d);
+					if (((x == 0 && y == 0 && w == screen_width && h == screen_height) || (x == struts[0] && y == struts[2] && w == maximised_width && h == maximised_height)) && (event.xmap.window != window)) {
+						window_list_add(&obscuring_windows, event.xmap.window);
 					}
-
-					XFree(data);
-				} else if (event.xproperty.atom == ATOM_NET_WM_STRUT) {
-					XGetWindowProperty(display, window, ATOM_NET_WM_STRUT, 0L, 12L, 0, XA_CARDINAL, &type, &format, &nitems, &bytes_after, &data);
-					set_net_wm_strut_partial(display, window, ((short*)data)[0], ((short*)data)[1], ((short*)data)[2], ((short*)data)[3]);
-					XFree(data);
-				}
-				break;
-			default:
-				break;
+					break;
+				case PropertyNotify:
+					if (event.xproperty.atom == ATOM_NET_CURRENT_DESKTOP) {
+						XGetWindowProperty(dpy_for_root, root_win, ATOM_NET_CURRENT_DESKTOP, 0L, 1L, 0, XA_CARDINAL, &type, &format, &nitems, &bytes_after, &data);
+						current_desktop = *(uint32_t*)data;
+						XFree(data);
+						XChangeProperty(display, window, ATOM_CURRENT_WORKSPACE, XA_CARDINAL, 8, PropModeReplace, (unsigned char*)&current_desktop, 1);
+					}
+					break;
+				case UnmapNotify:
+					window_list_remove(&obscuring_windows, event.xunmap.window);
+					break;
+				default:
+					break;
+			}
+		}
+		
+		if ((obscuring_windows.length == 0) != visible) {
+			visible = !visible;
+			XChangeProperty(display, window, ATOM_WINDOW_VISIBLE, XA_CARDINAL, 8, PropModeReplace, (unsigned char*)&visible, 1);
 		}
 	}
 
 FINISH:
+	return EXIT_SUCCESS;
+}
+
+int window_list_new(window_list_t *list) {
+	list->windows = malloc(sizeof(Window)*WINDOW_LIST_BLOCK_SIZE);
+	list->length = 0;
+	list->maxsize = WINDOW_LIST_BLOCK_SIZE;
+	return EXIT_SUCCESS;
+}
+
+int window_list_resize(window_list_t *list, size_t newsize) {
+	list->windows = realloc(list->windows, sizeof(Window)*newsize);
+	list->maxsize = newsize;
+	list->length = MIN(list->length, list->maxsize);
+	return EXIT_SUCCESS;
+}
+
+int window_list_add(window_list_t *list, Window win) {
+	if (list->length == list->maxsize) window_list_resize(list, list->maxsize+WINDOW_LIST_BLOCK_SIZE);
+	for (int i = 0; i < list->length; i++) {
+		if (list->windows[i] == win) return list->length;
+	}
+	list->windows[list->length] = win;
+	list->length++;
+	return list->length;
+}
+
+int window_list_remove(window_list_t *list, Window win) {
+	for (int i = 0; i < list->length; i++) {
+		if (list->windows[i] == win) {
+			for (int j = i+1; j < list->length; j++) {
+				list->windows[j-1] = list->windows[j];
+			}
+			list->length--;
+			return list->length;
+		}
+	}
+	return -1;
+}
+
+int window_list_delete(window_list_t *list) {
+	free(list->windows);
 	return EXIT_SUCCESS;
 }
