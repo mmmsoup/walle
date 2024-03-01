@@ -172,7 +172,7 @@ int set_net_wm_strut_partial(Display *display, Window window, short left, short 
 
 // fd: if should be daemonised, 'fd' will refer to the write end of a pipe, which will be written to when the window is created, so the parent process can return
 int window_run(Display *display, startup_properties_t startup_properties, int fd) {
-	if (bspwm_init() != EXIT_SUCCESS) WR_RET(EXIT_FAILURE);
+	if (bspwm_init(display) != EXIT_SUCCESS) WR_RET(EXIT_FAILURE);
 
 	Screen *screen = DefaultScreenOfDisplay(display);
 	int screen_width = WidthOfScreen(screen);

@@ -3,10 +3,47 @@
 int WM_IS_BSPWM = 0;
 char *bspc;
 
-int bspwm_init() {
-	// potentially assuming this is a bad idea (??)
-	WM_IS_BSPWM = 1;
-	return find_in_path("bspc", &bspc);
+int bspwm_init(Display *display) {
+	Atom supporting_wm_check = XInternAtom(display, "_NET_SUPPORTING_WM_CHECK", 0);
+	if (supporting_wm_check == None) {
+		WM_IS_BSPWM = 0;
+		return EXIT_SUCCESS;
+	}
+
+	Atom type;
+	int format;
+	unsigned long nitems, bytes_after;
+	unsigned char *data;
+	XGetWindowProperty(display, DefaultRootWindow(display), supporting_wm_check, 0L, 1L, 0, XA_WINDOW, &type, &format, &nitems, &bytes_after, &data);
+	if (nitems != 1) return EXIT_FAILURE;
+
+	Window bspwm_window = *(Window*)data;
+	XFree(data);
+
+	Atom net_wm_name = XInternAtom(display, "_NET_WM_NAME", 0);
+	if (net_wm_name == None) return EXIT_FAILURE;
+
+	bytes_after = 0;
+	XGetWindowProperty(display, bspwm_window, net_wm_name, 0L, 0L, 0, AnyPropertyType, &type, &format, &nitems, &bytes_after, &data);
+	if (bytes_after == 0) {
+		WM_IS_BSPWM = 0;
+		return EXIT_SUCCESS;
+	}
+	XGetWindowProperty(display, bspwm_window, net_wm_name, 0L, bytes_after/4+1, 0, AnyPropertyType, &type, &format, &nitems, &bytes_after, &data);
+	if (nitems != 5) {
+		WM_IS_BSPWM = 0;
+		return EXIT_SUCCESS;
+	}
+
+	if (strcmp((char*)data, "bspwm") == 0) {
+		WM_IS_BSPWM = 1;
+		XFree(data);
+		return find_in_path("bspc", &bspc);
+	} else {
+		WM_IS_BSPWM = 0;
+		XFree(data);
+		return EXIT_SUCCESS;
+	}
 }
 
 int find_in_path(char *filename, char **filepath) {
