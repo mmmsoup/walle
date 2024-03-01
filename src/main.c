@@ -3,6 +3,9 @@
 #include <unistd.h>
 #include <X11/Xlib.h>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb/stb_image.h>
+
 #include "config.h"
 #include "log.h"
 #include "window.h"
@@ -16,6 +19,83 @@ int set_struts(Display *display, short left, short right, short top, short botto
 	}
 
 	return set_net_wm_strut(display, window, left, right, top, bottom);
+}
+
+// check whether `filename' refers to a file that stbi can load (using internal functions to test to avoid potentially parsing the full file as that is done later by the server)
+int stbi_valid(char *filename) {
+	FILE *file = stbi__fopen(filename, "rb");
+	if (!file) return 0;
+
+	stbi__context s;
+	stbi__start_file(&s, file);
+
+	int valid = (0 ||
+#ifndef STBI_NO_PNG
+		stbi__png_test(&s) ||
+#endif
+#ifndef STBI_NO_BMP
+		stbi__bmp_test(&s) ||
+#endif
+#ifndef STBI_NO_GIF
+		stbi__gif_test(&s) ||
+#endif
+#ifndef STBI_NO_PSD
+		stbi__psd_test(&s) ||
+#endif
+#ifndef STBI_NO_PIC
+		stbi__pic_test(&s) ||
+#endif
+#ifndef STBI_NO_JPEG
+		stbi__jpeg_test(&s) ||
+#endif
+#ifndef STBI_NO_PNM
+		stbi__pnm_test(&s) ||
+#endif
+#ifndef STBI_NO_HDR
+		stbi__hdr_test(&s) ||
+#endif
+#ifndef STBI_NO_TGA
+		stbi__tga_test(&s) ||
+#endif
+		0);
+
+	fclose(file);
+
+	return valid;
+}
+
+int absolute_path(char **abs_path, char *rel_path) {
+	size_t rel_path_len = strlen(rel_path);
+
+	switch (rel_path[0]) {
+		case '/':
+			*abs_path = malloc(sizeof(char)*(rel_path_len+1));
+			strcpy(*abs_path, rel_path);
+			break;
+		case '~':
+			char *home = getenv("HOME");
+			size_t home_len = strlen(home);
+			*abs_path = malloc(sizeof(char)*(home_len+rel_path_len-1));
+			memcpy(*abs_path, home, home_len);
+			memcpy(*abs_path+home_len, rel_path+1, rel_path_len-1);
+			break;
+		case '.':
+			if (rel_path[1] == '/') {
+				rel_path += 2;
+				rel_path_len -= 2;
+			}
+		default:
+			char *pwd = getcwd(NULL, 0);
+			size_t pwd_len = strlen(pwd);
+			*abs_path = malloc(sizeof(char)*(pwd_len+rel_path_len+2));
+			memcpy(*abs_path, pwd, pwd_len);
+			(*abs_path)[pwd_len] = '/';
+			memcpy(*abs_path+pwd_len+1, rel_path, rel_path_len+1);
+			free(pwd);
+			break;
+	}
+
+	return EXIT_SUCCESS;
 }
 
 int main(int argc, char **argv) {
@@ -53,11 +133,11 @@ int main(int argc, char **argv) {
 						prog_return = window_run(display, startup_properties, fildes[1]);
 					} else { // error
 						ERR_ERRNO("fork()");
-						prog_return = EXIT_FAILURE;
+						prog_return = errno;
 					}
 				} else {
 					ERR_ERRNO("pipe()");
-					prog_return = EXIT_FAILURE;
+					prog_return = errno;
 				}
 			} else { // run in foreground
 				prog_return = window_run(display, startup_properties, 0);
@@ -92,7 +172,15 @@ int main(int argc, char **argv) {
 						short duration = (short)atoi(argv[4]);
 						XChangeProperty(display, window, ATOM_WALLPAPER_TRANSITION_DURATION, XA_CARDINAL, 16, PropModeReplace, (unsigned char *)&duration, 1);
 					case 4:
-						XChangeProperty(display, window, ATOM_WALLPAPER_PATH, XA_STRING, 8, PropModeReplace, (unsigned char *)argv[3], strlen(argv[3]));
+						char *abs_path;
+						absolute_path(&abs_path, argv[3]);
+						if (stbi_valid(abs_path)) {
+							XChangeProperty(display, window, ATOM_WALLPAPER_PATH, XA_STRING, 8, PropModeReplace, (unsigned char *)abs_path, strlen(abs_path));
+						} else {
+							ERR("stbi_valid(): invalid file");
+							prog_return = EXIT_FAILURE;
+						}
+						free(abs_path);
 						break;
 					default:
 						ERR("expected 1 or 2 value(s) after 'set %s'", argv[2]);

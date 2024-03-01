@@ -1,8 +1,5 @@
 #include "gl.h"
 
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb/stb_image.h>
-
 // try to mimic feh's '--bg-fill' option (i.e no horrible stretched or repeated textures)
 // TODO: I don't think this is quite right but I'll come back to it...
 int gl_set_texture_multiplier(gl_data_t *gl_data, int index) {
@@ -41,7 +38,7 @@ int gl_load_texture(gl_data_t *gl_data, int index, char *image_path) {
 	stbi_image_free(image_data);
 
 	glUseProgram(gl_data->shader_program);
-	char uniform_name[] = { 't', 'e', 'x', index ? '1' : '0', '\0' };
+	char uniform_name[] = { 't', 'e', 'x', index + 0x30, '\0' };
 	glUniform1i(glGetUniformLocation(gl_data->shader_program, uniform_name), index);
 
 	gl_set_texture_multiplier(gl_data, index);
