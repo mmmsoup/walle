@@ -5,7 +5,9 @@
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include <GL/glx.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <X11/Xatom.h>
 #include <X11/Xlib.h>
@@ -49,5 +51,8 @@ int gl_show_texture(gl_data_t *, int, double);
 int gl_resize(gl_data_t *);
 
 int gl_render(gl_data_t *);
+
+// check whether `filename' refers to a file that stbi can load (using internal functions to test to avoid potentially parsing the full file as that is done later by the server)
+int stbi_valid(char *);
 
 #endif

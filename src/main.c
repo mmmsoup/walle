@@ -3,10 +3,8 @@
 #include <unistd.h>
 #include <X11/Xlib.h>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb/stb_image.h>
-
 #include "config.h"
+#include "gl.h"			// for stbi_valid
 #include "log.h"
 #include "window.h"
 
@@ -19,49 +17,6 @@ int set_struts(Display *display, short left, short right, short top, short botto
 	}
 
 	return set_net_wm_strut(display, window, left, right, top, bottom);
-}
-
-// check whether `filename' refers to a file that stbi can load (using internal functions to test to avoid potentially parsing the full file as that is done later by the server)
-int stbi_valid(char *filename) {
-	FILE *file = stbi__fopen(filename, "rb");
-	if (!file) return 0;
-
-	stbi__context s;
-	stbi__start_file(&s, file);
-
-	int valid = (0 ||
-#ifndef STBI_NO_PNG
-		stbi__png_test(&s) ||
-#endif
-#ifndef STBI_NO_BMP
-		stbi__bmp_test(&s) ||
-#endif
-#ifndef STBI_NO_GIF
-		stbi__gif_test(&s) ||
-#endif
-#ifndef STBI_NO_PSD
-		stbi__psd_test(&s) ||
-#endif
-#ifndef STBI_NO_PIC
-		stbi__pic_test(&s) ||
-#endif
-#ifndef STBI_NO_JPEG
-		stbi__jpeg_test(&s) ||
-#endif
-#ifndef STBI_NO_PNM
-		stbi__pnm_test(&s) ||
-#endif
-#ifndef STBI_NO_HDR
-		stbi__hdr_test(&s) ||
-#endif
-#ifndef STBI_NO_TGA
-		stbi__tga_test(&s) ||
-#endif
-		0);
-
-	fclose(file);
-
-	return valid;
 }
 
 int absolute_path(char **abs_path, char *rel_path) {
@@ -298,7 +253,7 @@ int main(int argc, char **argv) {
 				"\tright [SIZE]\t\t\t\t-> set right strut to SIZE pixels\n"
 		);
 	} else {
-		ERR("unknown subcommand '%s'", argv[1]);
+		ERR("unknown subcommand '%s' - try '%s help'", argv[1], argv[0]);
 		prog_return = EXIT_FAILURE;
 	}
 

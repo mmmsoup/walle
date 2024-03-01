@@ -1,5 +1,8 @@
 #include "gl.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb/stb_image.h>
+
 // try to mimic feh's '--bg-fill' option (i.e no horrible stretched or repeated textures)
 // TODO: I don't think this is quite right but I'll come back to it...
 int gl_set_texture_multiplier(gl_data_t *gl_data, int index) {
@@ -144,8 +147,16 @@ int gl_init(gl_data_t *gl_data, Display *display, XVisualInfo *visual_info, Wind
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid *)(3 * sizeof(GLfloat)));
 	glEnableVertexAttribArray(1);
 
-	gl_load_texture(gl_data, 0, "/home/ben/Pictures/Wallpapers/coast.jpg");
-	gl_load_texture(gl_data, 1, "/home/ben/Pictures/Wallpapers/coast2.jpg");
+	for (int i = 0; i < 2; i++) {
+		glGenTextures(1, &(gl_data->textures[i].id));
+		glBindTexture(GL_TEXTURE_2D, gl_data->textures[i].id);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexImage2D(GL_TEXTURE_2D, 0, 3, 128, 128, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
+		glGenerateMipmap(GL_TEXTURE_2D);
+	}
 
 	gl_show_texture(gl_data, 0, 0);
 
@@ -215,4 +226,46 @@ int gl_render(gl_data_t *gl_data) {
 	glXSwapBuffers(gl_data->display, gl_data->window);
 
 	return EXIT_SUCCESS;
+}
+
+int stbi_valid(char *filename) {
+	FILE *file = stbi__fopen(filename, "rb");
+	if (!file) return 0;
+
+	stbi__context s;
+	stbi__start_file(&s, file);
+
+	int valid = (0 ||
+#ifndef STBI_NO_PNG
+		stbi__png_test(&s) ||
+#endif
+#ifndef STBI_NO_BMP
+		stbi__bmp_test(&s) ||
+#endif
+#ifndef STBI_NO_GIF
+		stbi__gif_test(&s) ||
+#endif
+#ifndef STBI_NO_PSD
+		stbi__psd_test(&s) ||
+#endif
+#ifndef STBI_NO_PIC
+		stbi__pic_test(&s) ||
+#endif
+#ifndef STBI_NO_JPEG
+		stbi__jpeg_test(&s) ||
+#endif
+#ifndef STBI_NO_PNM
+		stbi__pnm_test(&s) ||
+#endif
+#ifndef STBI_NO_HDR
+		stbi__hdr_test(&s) ||
+#endif
+#ifndef STBI_NO_TGA
+		stbi__tga_test(&s) ||
+#endif
+		0);
+
+	fclose(file);
+
+	return valid;
 }
