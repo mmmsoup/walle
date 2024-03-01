@@ -268,6 +268,35 @@ int main(int argc, char **argv) {
 				fflush(stdout);
 			}
 		}
+	} else if (strcmp(argv[1], "help") == 0) {
+		printf("%s [COMMAND] (ARGS)\n\n", argv[0]);
+		printf(
+				"COMMANDS\n"
+				"\tserver\t\t\t\t-> start the server\n"
+				"\tdaemon\t\t\t\t-> start the server and daemonise\n"
+				"\tkill\t\t\t\t-> kill the current instance\n"
+				"\tset [PROPERTY_SET] [VALUE]\t-> set PROPERTY_SET of running instance to VALUE\n"
+				"\tsubscribe (PROPERTIES_GET)\t-> subscribe to events when values of space-separated PROPERTIES_GET list change, or subscribe to all events if PROPERTIES_GET is omitted\n"
+				"\thelp\t\t\t\t-> show this help message:)\n"
+		);
+		printf("\n");
+		printf(
+				"PROPERTIES_GET\n"
+				"\tstruts\t\t-> empty space at edges of screen in px as the space-separated values [TOP] [BOTTOM] [LEFT] [RIGHT]\n"
+				"\tvisibility\t-> whether or not the walle window is obscured by one or more fullscreen or maximised windows (not perfect)\n"
+				"\twallpaper\t-> full path of current wallpaper\n"
+				"\tworkspace\t-> current workspace number\n"
+		);
+		printf("\n");
+		printf(
+				"PROPERTIES_SET\n"
+				"\tbgimg [PATH] (TRANSITION)\t\t-> set wallpaper to image at PATH with optional transition duration of TRANSITION milliseconds\n"
+				"\tstruts [TOP] [BOTTOM] [LEFT] [RIGHT]\t-> set empty space at edges of screen in pixels\n"
+				"\ttop [SIZE]\t\t\t\t-> set top strut to SIZE pixels\n"
+				"\tbottom [SIZE]\t\t\t\t-> set bottom strut to SIZE pixels\n"
+				"\tleft [SIZE]\t\t\t\t-> set left strut to SIZE pixels\n"
+				"\tright [SIZE]\t\t\t\t-> set right strut to SIZE pixels\n"
+		);
 	} else {
 		ERR("unknown subcommand '%s'", argv[1]);
 		prog_return = EXIT_FAILURE;
