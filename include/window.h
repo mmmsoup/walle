@@ -16,6 +16,7 @@
 #include "config.h"
 #include "gl.h"
 #include "log.h"
+#include "util.h"
 
 // https://github.com/baskerville/bspwm/issues/1382
 #include "bspwm.h"
@@ -36,8 +37,8 @@ extern Atom ATOM_CURRENT_WORKSPACE;
 extern Atom ATOM_WINDOW_VISIBLE;
 
 typedef struct {
-	char *image_path;
-	int left, right, top, bottom;
+	char *bgimg;
+	unsigned short struts[4]; // left right top bottom
 } startup_properties_t;
 
 int props_init(Display *);

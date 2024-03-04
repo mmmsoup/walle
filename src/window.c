@@ -177,9 +177,12 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 	Screen *screen = DefaultScreenOfDisplay(display);
 	int screen_width = WidthOfScreen(screen);
 	int screen_height = HeightOfScreen(screen);
-	short struts[4] = { 0, 0, 0, 0 };
-	int maximised_width = screen_width;
-	int maximised_height = screen_height;
+
+	unsigned short struts[4];
+	memcpy(struts, startup_properties.struts, sizeof(startup_properties.struts));
+
+	int maximised_width = screen_width - struts[0] - struts[1];
+	int maximised_height = screen_height - struts[2] - struts[3];
 
 	Window root_win = DefaultRootWindow(display);
 
@@ -218,6 +221,19 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 	gl_data_t gl_data;
 	gl_init(&gl_data, display, visual_info, window);
 
+	// set initial background
+	if (startup_properties.bgimg != NULL) {
+		gl_load_texture(&gl_data, 0, startup_properties.bgimg);
+		gl_load_texture(&gl_data, 1, startup_properties.bgimg);
+		XChangeProperty(display, window, ATOM_WALLPAPER_PATH, XA_STRING, 8, PropModeReplace, (unsigned char *)(startup_properties.bgimg), strlen(startup_properties.bgimg));
+		free(startup_properties.bgimg);
+	} else {
+		char col[] = { START_COLOUR };
+		gl_load_texture(&gl_data, 0, col);
+		gl_load_texture(&gl_data, 1, col);
+	}
+	gl_show_texture(&gl_data, 0, 0);
+
 	XMapWindow(display, window);
 	XFlush(display);
 
@@ -255,7 +271,7 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 		freopen("/dev/null", "w", stderr);
 	}
 
-	// for subsequent `XGetWindowProperty's
+	// for subsequent XGetWindowProperty calls
 	Atom type;
 	int format;
 	unsigned long nitems, bytes_after;
@@ -297,6 +313,7 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 				case Expose:
 					if (event.xexpose.count != 0) break;
 				case ConfigureNotify:
+					set_net_wm_strut(display, window, struts[0], struts[1], struts[2], struts[3]);
 					gl_resize(&gl_data);
 					break;
 				case PropertyNotify:

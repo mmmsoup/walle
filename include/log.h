@@ -20,7 +20,7 @@
 #ifdef ENABLE_DEBUG
 #define DEBUG(format, ...) LOG(1, format, ##__VA_ARGS__)
 #else
-#define DEBUG(...) printf("hello")
+#define DEBUG(...) void(0)
 #endif
 
 #endif

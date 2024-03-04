@@ -1,5 +1,5 @@
 # wall-e
-A little wallpaper programme for X that has a few features for fancy visual effects etc., for example my set-up with [bspwm](https://github.com/baskerville/bspwm/), [eww](https://github.com/elkowar/eww), and [picom](https://github.com/dccsillag/picom):
+A silly little wallpaper programme for X that has a few features for vaguely fun visual effects, for example my set-up with [bspwm](https://github.com/baskerville/bspwm/), [eww](https://github.com/elkowar/eww), and [picom](https://github.com/dccsillag/picom):
 
 https://github.com/mmmsoup/walle/assets/42009575/f36c8e74-92c0-4d59-b3ce-6b0d311c52a7
 

@@ -1,12 +1,16 @@
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#include <X11/Xatom.h>
 #include <X11/Xlib.h>
 
 #include "config.h"
 #include "gl.h"			// for stbi_valid
 #include "log.h"
+#include "util.h"
 #include "window.h"
+
+#define STR(x) #x
 
 int set_struts(Display *display, short left, short right, short top, short bottom) {
 	Window window = get_program_window(display);
@@ -19,41 +23,64 @@ int set_struts(Display *display, short left, short right, short top, short botto
 	return set_net_wm_strut(display, window, left, right, top, bottom);
 }
 
-int absolute_path(char **abs_path, char *rel_path) {
-	size_t rel_path_len = strlen(rel_path);
+#define CHECK_N_ARGS(prop, n) { \
+	if (i + n >= argc) { \
+		ERR("expected %i arguments for property '%s', found %i", n, prop, argc - i - 1); \
+		return EXIT_FAILURE; \
+	} \
+}
 
-	switch (rel_path[0]) {
-		case '/':
-			*abs_path = malloc(sizeof(char)*(rel_path_len+1));
-			strcpy(*abs_path, rel_path);
-			break;
-		case '~':
-			char *home = getenv("HOME");
-			size_t home_len = strlen(home);
-			*abs_path = malloc(sizeof(char)*(home_len+rel_path_len-1));
-			memcpy(*abs_path, home, home_len);
-			memcpy(*abs_path+home_len, rel_path+1, rel_path_len-1);
-			break;
-		case '.':
-			if (rel_path[1] == '/') {
-				rel_path += 2;
-				rel_path_len -= 2;
-			}
-		default:
-			char *pwd = getcwd(NULL, 0);
-			size_t pwd_len = strlen(pwd);
-			*abs_path = malloc(sizeof(char)*(pwd_len+rel_path_len+2));
-			memcpy(*abs_path, pwd, pwd_len);
-			(*abs_path)[pwd_len] = '/';
-			memcpy(*abs_path+pwd_len+1, rel_path, rel_path_len+1);
-			free(pwd);
-			break;
-	}
-
-	return EXIT_SUCCESS;
+#define USHORT_FROM_STR(uintptr, str) { \
+	char *end; \
+	long l = strtol(str, &end, 10); \
+	if (*end == '\0') { \
+		if (l >= 0 && l <= UINT_MAX) *uintptr = (unsigned short)l; \
+		else { \
+			ERR("could not interpret '%s' as unsigned short: out of range [0,%u]", str, UINT_MAX); \
+			return EXIT_FAILURE; \
+		} \
+	} else { \
+		ERR("could not interpret '%s' as unsigned short: invalid character '%c'", str, *end); \
+		return EXIT_FAILURE; \
+	} \
 }
 
 int main(int argc, char **argv) {
+	if (argc == 1) {
+		ERR("no subcommand provided");
+		return EXIT_FAILURE;
+	} else if (strcmp(argv[1], "help") == 0) {
+		printf("%s [COMMAND] (ARGS)\n\n", argv[0]);
+		printf(
+				"COMMANDS\n"
+				"\tserver (PROPERTIES_SET)\t\t-> start the server with optional properties given as '--property value1 (value 2 ...)'\n"
+				"\tdaemon (PROPERTIES_SET)\t\t-> start the server and daemonise with optional properties like the non-daemonised subcommand\n"
+				"\tkill\t\t\t\t-> kill the current instance\n"
+				"\tset [PROPERTY_SET] [VALUE]\t-> set PROPERTY_SET of running instance to VALUE\n"
+				"\tsubscribe (PROPERTIES_GET)\t-> subscribe to events when values of space-separated PROPERTIES_GET list change, or subscribe to all events if PROPERTIES_GET is omitted\n"
+				"\thelp\t\t\t\t-> show this help message:)\n"
+		);
+		printf("\n");
+		printf(
+				"PROPERTIES_GET\n"
+				"\tstruts\t\t-> empty space at edges of screen in px as the space-separated values [TOP] [BOTTOM] [LEFT] [RIGHT]\n"
+				"\tvisibility\t-> whether or not the "PROJECT_NAME" window is obscured by one or more fullscreen or maximised windows (not perfect)\n"
+				"\twallpaper\t-> full path of current wallpaper\n"
+				"\tworkspace\t-> current workspace number\n"
+		);
+		printf("\n");
+		printf(
+				"PROPERTIES_SET\n"
+				"\tbgimg [PATH] (TRANSITION)\t\t-> set wallpaper to image at PATH with optional transition duration of TRANSITION milliseconds\n"
+				"\tstruts [TOP] [BOTTOM] [LEFT] [RIGHT]\t-> set empty space at edges of screen in pixels\n"
+				"\ttop [SIZE]\t\t\t\t-> set top strut to SIZE pixels\n"
+				"\tbottom [SIZE]\t\t\t\t-> set bottom strut to SIZE pixels\n"
+				"\tleft [SIZE]\t\t\t\t-> set left strut to SIZE pixels\n"
+				"\tright [SIZE]\t\t\t\t-> set right strut to SIZE pixels\n"
+		);
+		return EXIT_SUCCESS;
+	}
+
 	Display *display = XOpenDisplay(NULL);
 	if (display == NULL) {
 		ERR("XOpenDisplay(): unable to open display");
@@ -68,12 +95,62 @@ int main(int argc, char **argv) {
 		exit(EXIT_FAILURE);
 	}
 
-	if (argc == 1) {
-		ERR("no subcommand provided");
-		prog_return = EXIT_FAILURE;
-	} else if (argc == 2 && (strcmp(argv[1], "server") == 0 || strcmp(argv[1], "daemon") == 0)) {
+	if (strcmp(argv[1], "server") == 0 || strcmp(argv[1], "daemon") == 0) {
 		if (get_program_window(display) == 0x0) {
 			startup_properties_t startup_properties;
+			memset(&startup_properties, 0, sizeof(startup_properties_t));
+
+			short i = 2;
+			while (i < argc) {
+				if (argv[i][0] == '-' && argv[i][1] == '-') {
+					const char *stropts[] = { "struts", "left", "right", "top", "bottom", "bgimg" };
+					const enum { struts, left, right, top, bottom, bgimg } intopts;
+					int opt = -1;
+					for (int j = 0; j < sizeof(stropts)/sizeof(char*); j++) {
+						if (strcmp(argv[i]+2, stropts[j]) == 0) {
+							opt = j;
+							break;
+						}
+					}
+
+					switch (opt) {
+						case struts:
+							CHECK_N_ARGS("struts", 4);
+							for (int j = 0; j < 4; j++) USHORT_FROM_STR(&(startup_properties.struts[j]), argv[i+j+1]);
+							i += 4;
+							break;
+						case left:
+						case right:
+						case top:
+						case bottom:
+							CHECK_N_ARGS(argv[i]+2, 1);
+							// this relies on left,right,top,bottom being contiguous and in order in the above enum so probably not great practice??
+							USHORT_FROM_STR(&(startup_properties.struts[opt-left]), argv[i+1]);
+							i++;
+							break;
+						case bgimg:
+							CHECK_N_ARGS(argv[i]+2, 1);
+							absolute_path(&(startup_properties.bgimg), argv[i+1]);
+							if (!stbi_valid(startup_properties.bgimg)) {
+								ERR("invalid path for bgimg: '%s'", argv[i+1]);
+								return EXIT_FAILURE;
+							}
+							i++;
+							break;
+						case -1:
+							ERR("unknown option '%s'", argv[i]+2);
+							return EXIT_FAILURE;
+						default:
+							ERR("not sure how this happened??");
+							return EXIT_FAILURE;
+					}
+				} else {
+					ERR("expected property option, got '%s'", argv[i]);
+					return EXIT_FAILURE;
+				}
+
+				i++;
+			}
 
 			if (argv[1][0] == 'd') { // daemonise
 				int fildes[2];
@@ -223,35 +300,6 @@ int main(int argc, char **argv) {
 				fflush(stdout);
 			}
 		}
-	} else if (strcmp(argv[1], "help") == 0) {
-		printf("%s [COMMAND] (ARGS)\n\n", argv[0]);
-		printf(
-				"COMMANDS\n"
-				"\tserver\t\t\t\t-> start the server\n"
-				"\tdaemon\t\t\t\t-> start the server and daemonise\n"
-				"\tkill\t\t\t\t-> kill the current instance\n"
-				"\tset [PROPERTY_SET] [VALUE]\t-> set PROPERTY_SET of running instance to VALUE\n"
-				"\tsubscribe (PROPERTIES_GET)\t-> subscribe to events when values of space-separated PROPERTIES_GET list change, or subscribe to all events if PROPERTIES_GET is omitted\n"
-				"\thelp\t\t\t\t-> show this help message:)\n"
-		);
-		printf("\n");
-		printf(
-				"PROPERTIES_GET\n"
-				"\tstruts\t\t-> empty space at edges of screen in px as the space-separated values [TOP] [BOTTOM] [LEFT] [RIGHT]\n"
-				"\tvisibility\t-> whether or not the walle window is obscured by one or more fullscreen or maximised windows (not perfect)\n"
-				"\twallpaper\t-> full path of current wallpaper\n"
-				"\tworkspace\t-> current workspace number\n"
-		);
-		printf("\n");
-		printf(
-				"PROPERTIES_SET\n"
-				"\tbgimg [PATH] (TRANSITION)\t\t-> set wallpaper to image at PATH with optional transition duration of TRANSITION milliseconds\n"
-				"\tstruts [TOP] [BOTTOM] [LEFT] [RIGHT]\t-> set empty space at edges of screen in pixels\n"
-				"\ttop [SIZE]\t\t\t\t-> set top strut to SIZE pixels\n"
-				"\tbottom [SIZE]\t\t\t\t-> set bottom strut to SIZE pixels\n"
-				"\tleft [SIZE]\t\t\t\t-> set left strut to SIZE pixels\n"
-				"\tright [SIZE]\t\t\t\t-> set right strut to SIZE pixels\n"
-		);
 	} else {
 		ERR("unknown subcommand '%s' - try '%s help'", argv[1], argv[0]);
 		prog_return = EXIT_FAILURE;

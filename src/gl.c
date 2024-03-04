@@ -21,12 +21,24 @@ int gl_load_texture(gl_data_t *gl_data, int index, char *image_path) {
 
 	if (gl_data->textures[index].id != 0) glDeleteTextures(1, &(gl_data->textures[index].id));
 
-	int num_channels;
-	stbi_set_flip_vertically_on_load(1);
-	unsigned char *image_data = stbi_load(image_path, &(gl_data->textures[index].width), &(gl_data->textures[index].height), &num_channels, 3);
-	if (image_data == NULL) {
-		ERR("stbi_load(): failure of some description?");
-		return EXIT_FAILURE;
+	unsigned char *image_data;
+	void (*fr)(void*) = free;
+
+	if (image_path[0] != '/') {
+		// silly way to set background to single colour using textures because I'm scared of changing the OpenGL code aaaaaaa
+		image_data = malloc(3*sizeof(char));
+		memcpy(image_data, image_path, 3);
+		gl_data->textures[index].width = 1;
+		gl_data->textures[index].height = 1;
+	} else {
+		int num_channels;
+		stbi_set_flip_vertically_on_load(1);
+		image_data = stbi_load(image_path, &(gl_data->textures[index].width), &(gl_data->textures[index].height), &num_channels, 3);
+		if (image_data == NULL) {
+			ERR("stbi_load(): failure of some description?");
+			return EXIT_FAILURE;
+		}
+		fr = stbi_image_free;
 	}
 
 	glGenTextures(1, &(gl_data->textures[index].id));
@@ -35,10 +47,10 @@ int gl_load_texture(gl_data_t *gl_data, int index, char *image_path) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexImage2D(GL_TEXTURE_2D, 0, num_channels, gl_data->textures[index].width, gl_data->textures[index].height, 0, GL_RGB, GL_UNSIGNED_BYTE, image_data);
+	glTexImage2D(GL_TEXTURE_2D, 0, 3, gl_data->textures[index].width, gl_data->textures[index].height, 0, GL_RGB, GL_UNSIGNED_BYTE, image_data);
 	glGenerateMipmap(GL_TEXTURE_2D);
 
-	stbi_image_free(image_data);
+	fr(image_data);
 
 	glUseProgram(gl_data->shader_program);
 	char uniform_name[] = { 't', 'e', 'x', index + 0x30, '\0' };
