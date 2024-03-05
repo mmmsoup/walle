@@ -104,9 +104,8 @@ int main(int argc, char **argv) {
 			while (i < argc) {
 				if (argv[i][0] == '-' && argv[i][1] == '-') {
 					const char *stropts[] = { "struts", "left", "right", "top", "bottom", "bgimg" };
-					const enum { struts, left, right, top, bottom, bgimg } intopts;
-					int opt = -1;
-					for (int j = 0; j < sizeof(stropts)/sizeof(char*); j++) {
+					enum { none = -1, struts, left, right, top, bottom, bgimg } opt = none;
+					for (size_t j = 0; j < sizeof(stropts)/sizeof(char*); j++) {
 						if (strcmp(argv[i]+2, stropts[j]) == 0) {
 							opt = j;
 							break;
@@ -137,7 +136,7 @@ int main(int argc, char **argv) {
 							}
 							i++;
 							break;
-						case -1:
+						case none:
 							ERR("unknown option '%s'", argv[i]+2);
 							return EXIT_FAILURE;
 						default:

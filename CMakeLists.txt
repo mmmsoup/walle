@@ -1,6 +1,5 @@
-project(walle)
-
 cmake_minimum_required(VERSION 3.13)
+project(walle)
 
 # === DIRS ===
 set(CMAKE_CURRENT_BINARY_DIR "${CMAKE_CURRENT_LIST_DIR}/build")
@@ -19,8 +18,8 @@ configure_file("${CMAKE_CURRENT_LIST_DIR}/config.h.in" "${BUILD_INCLUDE_DIR}/con
 # modified from https://cmake.org/pipermail/cmake/2013-January/053117.html
 set(FILENAME_MACRO "-D__FILENAME__='\"$(patsubst CMakeFiles/${PROJECT_NAME}.dir/%.o,%,$@)\"'")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${FILENAME_MACRO}")
-set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} ${FILENAME_MACRO} -DENABLE_DEBUG -Wall -Wno-unused-variable -ggdb")
-set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS} ${FILENAME_MACRO} -O3")
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DENABLE_DEBUG -Wall -Wextra -Wno-implicit-fallthrough -ggdb")
+set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3")
 # ============
 
 # === GL3W ===

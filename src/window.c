@@ -83,7 +83,7 @@ Window get_program_window(Display *display) {
 	int format;
 	unsigned long nitems, bytes_after;
 	unsigned char *prop;
-	for (int i = 0; i < nchildren; i++) {
+	for (unsigned int i = 0; i < nchildren; i++) {
 		XGetWindowProperty(display, *(children+i), ATOM_WM_CLASS, 0L, strlen(WINDOW_CLASS)/4 + 1, 0, XA_STRING, &type, &format, &nitems, &bytes_after, &prop);
 		if (prop != NULL && strcmp((char *)prop, WINDOW_CLASS) == 0) {
 			window = *(children+i);
@@ -175,14 +175,14 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 	if (bspwm_init(display) != EXIT_SUCCESS) WR_RET(EXIT_FAILURE);
 
 	Screen *screen = DefaultScreenOfDisplay(display);
-	int screen_width = WidthOfScreen(screen);
-	int screen_height = HeightOfScreen(screen);
+	unsigned int screen_width = WidthOfScreen(screen);
+	unsigned int screen_height = HeightOfScreen(screen);
 
 	unsigned short struts[4];
 	memcpy(struts, startup_properties.struts, sizeof(startup_properties.struts));
 
-	int maximised_width = screen_width - struts[0] - struts[1];
-	int maximised_height = screen_height - struts[2] - struts[3];
+	unsigned int maximised_width = screen_width - struts[0] - struts[1];
+	unsigned int maximised_height = screen_height - struts[2] - struts[3];
 
 	Window root_win = DefaultRootWindow(display);
 
@@ -279,7 +279,6 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 
 	XEvent event;
 	int pollret = 0;
-	XWindowAttributes window_attributes;
 	while (1) {
 		gl_render(&gl_data);
 		usleep(1000);
@@ -302,7 +301,7 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 			
 			switch (event.type) {
 				case ClientMessage:
-					if (event.xclient.message_type == ATOM_WM_PROTOCOLS && event.xclient.data.l[0] == ATOM_WM_DELETE_WINDOW) {
+					if (event.xclient.message_type == ATOM_WM_PROTOCOLS && (Atom)(event.xclient.data.l[0]) == ATOM_WM_DELETE_WINDOW) {
 						set_net_wm_strut_partial(display, window, 0, 0, 0, 0);
 						//glXMakeCurrent(display, None, NULL);
 						//glXDestroyContext(display, glx_context);
@@ -357,7 +356,7 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 
 			switch (event.type) {
 				case ConfigureNotify:
-					if (((event.xconfigure.x == 0 && event.xconfigure.y == 0 && event.xconfigure.width == screen_width && event.xconfigure.height == screen_height) || (event.xconfigure.x == struts[0] && event.xconfigure.y == struts[2] && event.xconfigure.width == maximised_width && event.xconfigure.height == maximised_height)) && (event.xconfigure.window != window)) {
+					if (((event.xconfigure.x <= 0 && event.xconfigure.y <= 0 && (unsigned int)(event.xconfigure.width) >= screen_width && (unsigned int)(event.xconfigure.height) >= screen_height) || (event.xconfigure.x <= struts[0] && event.xconfigure.y <= struts[2] && (unsigned int)(event.xconfigure.width) >= maximised_width && (unsigned int)(event.xconfigure.height) >= maximised_height)) && (event.xconfigure.window != window)) {
 						/* checking workspace of window in question fixes an issue arising from fullscreen windows on other workspaces being reconfigured */
 						XGetWindowProperty(dpy_for_root, event.xconfigure.window, ATOM_NET_WM_DESKTOP, 0L, 1L, 0, XA_CARDINAL, &type, &format, &nitems, &bytes_after, &data);
 						if (*(uint32_t*)data == current_desktop) {
@@ -374,7 +373,7 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 					int x, y;
 					unsigned int w, h, bw, d;
 					XGetGeometry(dpy_for_root, event.xmap.window, &r, &x, &y, &w, &h, &bw, &d);
-					if (((x == 0 && y == 0 && w == screen_width && h == screen_height) || (x == struts[0] && y == struts[2] && w == maximised_width && h == maximised_height)) && (event.xmap.window != window)) {
+					if (((x <= 0 && y <= 0 && w >= screen_width && h >= screen_height) || (x <= struts[0] && y <= struts[2] && w >= maximised_width && h >= maximised_height)) && (event.xmap.window != window)) {
 						window_list_add(&obscuring_windows, event.xmap.window);
 					}
 					break;
@@ -420,7 +419,7 @@ int window_list_resize(window_list_t *list, size_t newsize) {
 
 int window_list_add(window_list_t *list, Window win) {
 	if (list->length == list->maxsize) window_list_resize(list, list->maxsize+WINDOW_LIST_BLOCK_SIZE);
-	for (int i = 0; i < list->length; i++) {
+	for (size_t i = 0; i < list->length; i++) {
 		if (list->windows[i] == win) return list->length;
 	}
 	list->windows[list->length] = win;
@@ -429,9 +428,9 @@ int window_list_add(window_list_t *list, Window win) {
 }
 
 int window_list_remove(window_list_t *list, Window win) {
-	for (int i = 0; i < list->length; i++) {
+	for (size_t i = 0; i < list->length; i++) {
 		if (list->windows[i] == win) {
-			for (int j = i+1; j < list->length; j++) {
+			for (size_t j = i+1; j < list->length; j++) {
 				list->windows[j-1] = list->windows[j];
 			}
 			list->length--;
