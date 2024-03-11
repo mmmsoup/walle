@@ -359,10 +359,10 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 					if (((event.xconfigure.x <= 0 && event.xconfigure.y <= 0 && (unsigned int)(event.xconfigure.width) >= screen_width && (unsigned int)(event.xconfigure.height) >= screen_height) || (event.xconfigure.x <= struts[0] && event.xconfigure.y <= struts[2] && (unsigned int)(event.xconfigure.width) >= maximised_width && (unsigned int)(event.xconfigure.height) >= maximised_height)) && (event.xconfigure.window != window)) {
 						/* checking workspace of window in question fixes an issue arising from fullscreen windows on other workspaces being reconfigured */
 						XGetWindowProperty(dpy_for_root, event.xconfigure.window, ATOM_NET_WM_DESKTOP, 0L, 1L, 0, XA_CARDINAL, &type, &format, &nitems, &bytes_after, &data);
-						if (*(uint32_t*)data == current_desktop) {
-							window_list_add(&obscuring_windows, event.xconfigure.window);
+						if (nitems > 0) {
+							if (*(uint32_t*)data == current_desktop) window_list_add(&obscuring_windows, event.xconfigure.window);
+							XFree(data);
 						}
-						XFree(data);
 					} else window_list_remove(&obscuring_windows, event.xconfigure.window);
 					break;
 				case DestroyNotify:
