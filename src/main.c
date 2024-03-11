@@ -47,7 +47,7 @@ int set_struts(Display *display, short left, short right, short top, short botto
 
 int main(int argc, char **argv) {
 	if (argc == 1) {
-		ERR("no subcommand provided");
+		ERR("no subcommand provided - try '%s help'", argv[0]);
 		return EXIT_FAILURE;
 	} else if (strcmp(argv[1], "help") == 0) {
 		printf("%s [COMMAND] (ARGS)\n\n", argv[0]);
