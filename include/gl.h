@@ -12,7 +12,9 @@
 #include <X11/Xatom.h>
 #include <X11/Xlib.h>
 
+#include "config.h"
 #include "log.h"
+#include SHADER_HEADER
 
 #define CLOCKS_PER_MSEC (CLOCKS_PER_SEC / 1000)
 

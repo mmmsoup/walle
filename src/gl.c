@@ -74,32 +74,13 @@ int gl_init(gl_data_t *gl_data, Display *display, XVisualInfo *visual_info, Wind
 
 	glEnable(GL_DEPTH_TEST);
 
-	const GLchar *vertex_shader_source =
-		"#version 330 core\n"
-		"layout (location = 0) in vec3 pos;\n"
-		"layout (location = 1) in vec2 intexcoord;\n"
-		"out vec2 texcoord;\n"
-		"void main() { \n"
-		"gl_Position = vec4(pos, 1.0);\n"
-		"texcoord = intexcoord;\n"
-		"}";
-	const GLchar *fragment_shader_source =
-		"#version 330 core\n"
-		"in vec2 texcoord;\n"
-		"uniform sampler2D tex0;\n"
-		"uniform vec2 tex0mult;\n"
-		"uniform sampler2D tex1;\n"
-		"uniform vec2 tex1mult;\n"
-		"uniform float mixing;\n"
-		"out vec4 FragColor;\n"
-		"void main() { \n"
-		"FragColor = mix(texture2D(tex0, texcoord * tex0mult), texture2D(tex1, texcoord * tex1mult), mixing);\n"
-		"}";
+	const char *default_vertex_shader = default_vertex_shader_source;
+	const char *default_fragment_shader = default_fragment_shader_source;
 	GLint success = GL_TRUE;
 	GLsizei log_length;
 
 	GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertex_shader, 1, &vertex_shader_source, NULL);
+    glShaderSource(vertex_shader, 1, &default_vertex_shader, &default_vertex_shader_source_len);
     glCompileShader(vertex_shader);
     glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, &success);
 	if (success != GL_TRUE) {
@@ -109,7 +90,7 @@ int gl_init(gl_data_t *gl_data, Display *display, XVisualInfo *visual_info, Wind
 		ERR("glCompileShader(): %s", log_buffer);
 	}
 	GLuint fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragment_shader, 1, &fragment_shader_source, NULL);
+    glShaderSource(fragment_shader, 1, &default_fragment_shader, &default_fragment_shader_source_len);
     glCompileShader(fragment_shader);
     glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, &success);
 	if (success != GL_TRUE) {

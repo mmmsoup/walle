@@ -5,6 +5,8 @@
 #define PROJECT_NAME_CAPS "${PROJECT_NAME_CAPS}"
 #define BUILD_TYPE "${CMAKE_BUILD_TYPE}"
 
+#define SHADER_HEADER "${SHADER_HEADER}"
+
 // hacky way to try to fix problem where sometimes window does not resize for the user when it should
 // #define ENABLE_RESIZE_HACK 1
 // #define RESIZE_HACK_CMD "bspc rule -a \\* -o hidden=on && $TERMINAL -e sh -c exit"
