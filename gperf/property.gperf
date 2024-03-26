@@ -1,0 +1,35 @@
+%{
+
+#include "gperf.h"
+
+typedef enum {
+// subscribable
+	PROPERTY_BGIMG		= 1 << 0,
+	PROPERTY_STRUTS		= 1 << 1,
+	PROPERTY_VISIBILITY = 1 << 2,
+	PROPERTY_WORKSPACE	= 1 << 3,
+//
+	PROPERTY_BOTTOM		= 1 << 8,
+	PROPERTY_LEFT		= 1 << 9,
+	PROPERTY_RIGHT 		= 1 << 10,
+	PROPERTY_TOP		= 1 << 11
+} gperf_properties;
+
+%}
+
+%language=C
+%define lookup-function-name gperf_property_lookup
+%define hash-function-name gperf_property_hash
+
+struct gsiv_t;
+%%
+####
+bgimg,		PROPERTY_BGIMG
+bottom,		PROPERTY_BOTTOM
+left,		PROPERTY_LEFT
+right,		PROPERTY_RIGHT
+struts,		PROPERTY_STRUTS
+top,		PROPERTY_TOP
+visibility	PROPERTY_VISIBILITY
+workspace	PROPERTY_WORKSPACE
+####

@@ -1,0 +1,31 @@
+%{
+
+#include "gperf.h"
+
+typedef enum {
+	SUBCMD_DAEMON,
+	SUBCMD_GET,
+	SUBCMD_HELP,
+	SUBCMD_KILL,
+	SUBCMD_SERVER,
+	SUBCMD_SET,
+	SUBCMD_SUBSCRIBE
+} gperf_subcmds;
+
+%}
+
+%language=C
+%define lookup-function-name gperf_subcmd_lookup
+%define hash-function-name gperf_subcmd_hash
+
+struct gsiv_t;
+%%
+####
+daemon,		SUBCMD_DAEMON
+get,		SUBCMD_GET
+help,		SUBCMD_HELP
+kill,		SUBCMD_KILL
+server,		SUBCMD_SERVER
+set,		SUBCMD_SET
+subscribe,	SUBCMD_SUBSCRIBE
+####
