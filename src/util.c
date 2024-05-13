@@ -33,3 +33,7 @@ int absolute_path(char **abs_path, char *rel_path) {
 
 	return EXIT_SUCCESS;
 }
+
+char hex_char_val(char hex) {
+	return (hex >= 0x30 && hex <= 0x39) ? (hex - 0x30) : ((hex >= 0x61 && hex <= 0x66) ? (hex - 0x57) : ((hex >= 0x41 && hex <= 0x46) ? (hex - 0x37) : -1));
+}

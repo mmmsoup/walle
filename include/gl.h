@@ -14,6 +14,8 @@
 
 #include "config.h"
 #include "log.h"
+#include "util.h"
+
 #include SHADER_HEADER
 
 #define CLOCKS_PER_MSEC (CLOCKS_PER_SEC / 1000)
@@ -45,6 +47,8 @@ typedef struct {
 int gl_set_texture_multiplier(gl_data_t *, int);
 
 int gl_load_texture(gl_data_t *, int, char *);
+
+int gl_load_shaders(GLuint*, char*, int, char*, int);
 
 int gl_init(gl_data_t *, Display *, XVisualInfo *, Window);
 

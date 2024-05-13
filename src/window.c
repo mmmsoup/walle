@@ -228,9 +228,8 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 		XChangeProperty(display, window, ATOM_WALLPAPER_PATH, XA_STRING, 8, PropModeReplace, (unsigned char *)(startup_properties.bgimg), strlen(startup_properties.bgimg));
 		free(startup_properties.bgimg);
 	} else {
-		char col[] = { START_COLOUR };
-		gl_load_texture(&gl_data, 0, col);
-		gl_load_texture(&gl_data, 1, col);
+		gl_load_texture(&gl_data, 0, START_COLOUR);
+		gl_load_texture(&gl_data, 1, START_COLOUR);
 	}
 	gl_show_texture(&gl_data, 0, 0);
 

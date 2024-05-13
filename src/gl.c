@@ -24,13 +24,7 @@ int gl_load_texture(gl_data_t *gl_data, int index, char *image_path) {
 	unsigned char *image_data;
 	void (*fr)(void*) = free;
 
-	if (image_path[0] != '/') {
-		// silly way to set background to single colour using textures because I'm scared of changing the OpenGL code aaaaaaa
-		image_data = malloc(3*sizeof(char));
-		memcpy(image_data, image_path, 3);
-		gl_data->textures[index].width = 1;
-		gl_data->textures[index].height = 1;
-	} else {
+	if (image_path[0] == '/') {
 		int num_channels;
 		stbi_set_flip_vertically_on_load(1);
 		image_data = stbi_load(image_path, &(gl_data->textures[index].width), &(gl_data->textures[index].height), &num_channels, 3);
@@ -39,6 +33,14 @@ int gl_load_texture(gl_data_t *gl_data, int index, char *image_path) {
 			return EXIT_FAILURE;
 		}
 		fr = stbi_image_free;
+	} else {
+		// silly way to set background to single colour using textures because I'm scared of changing the OpenGL code aaaaaaa
+		image_data = malloc(3*sizeof(char));
+		image_data[0] = hex_char_val(image_path[1]) * 16 + hex_char_val(image_path[2]);
+		image_data[1] = hex_char_val(image_path[3]) * 16 + hex_char_val(image_path[4]);
+		image_data[2] = hex_char_val(image_path[5]) * 16 + hex_char_val(image_path[6]);
+		gl_data->textures[index].width = 1;
+		gl_data->textures[index].height = 1;
 	}
 
 	glGenTextures(1, &(gl_data->textures[index].id));
@@ -61,26 +63,18 @@ int gl_load_texture(gl_data_t *gl_data, int index, char *image_path) {
 	return EXIT_SUCCESS;
 }
 
-int gl_init(gl_data_t *gl_data, Display *display, XVisualInfo *visual_info, Window window) {
-	memset(gl_data, 0, sizeof(gl_data_t));
-	gl_data->display = display;
-	gl_data->window = window;
-	gl_data->mixing = 1.0f;
+int gl_load_shaders(GLuint *program, char *custom_vertex_source, int vertex_source_len, char *custom_fragment_source, int fragment_source_len) {
+	const char *vertex_source = custom_vertex_source == NULL ? default_vertex_shader_source : custom_vertex_source;
+	const char *fragment_source = custom_fragment_source == NULL ? default_fragment_shader_source : custom_fragment_source;
 
-	gl3wInit();
+	vertex_source_len = custom_vertex_source == NULL ? default_vertex_shader_source_len : vertex_source_len;
+	fragment_source_len = custom_fragment_source == NULL ? default_fragment_shader_source_len : fragment_source_len;
 
-	GLXContext glx_context = glXCreateContext(display, visual_info, NULL, GL_TRUE);
-	glXMakeCurrent(gl_data->display, gl_data->window, glx_context);
-
-	glEnable(GL_DEPTH_TEST);
-
-	const char *default_vertex_shader = default_vertex_shader_source;
-	const char *default_fragment_shader = default_fragment_shader_source;
 	GLint success = GL_TRUE;
 	GLsizei log_length;
 
 	GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertex_shader, 1, &default_vertex_shader, &default_vertex_shader_source_len);
+    glShaderSource(vertex_shader, 1, &vertex_source, &vertex_source_len);
     glCompileShader(vertex_shader);
     glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, &success);
 	if (success != GL_TRUE) {
@@ -88,9 +82,10 @@ int gl_init(gl_data_t *gl_data, Display *display, XVisualInfo *visual_info, Wind
 		GLchar log_buffer[log_length - 1];
 		glGetShaderInfoLog(vertex_shader, log_length - 1, NULL, log_buffer);
 		ERR("glCompileShader(): %s", log_buffer);
+		return EXIT_FAILURE;
 	}
 	GLuint fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragment_shader, 1, &default_fragment_shader, &default_fragment_shader_source_len);
+    glShaderSource(fragment_shader, 1, &fragment_source, &fragment_source_len);
     glCompileShader(fragment_shader);
     glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, &success);
 	if (success != GL_TRUE) {
@@ -98,20 +93,44 @@ int gl_init(gl_data_t *gl_data, Display *display, XVisualInfo *visual_info, Wind
 		GLchar log_buffer[log_length - 1];
 		glGetShaderInfoLog(fragment_shader, log_length - 1, NULL, log_buffer);
 		ERR("glCompileShader(): %s", log_buffer);
+		return EXIT_FAILURE;
 	}
-	gl_data->shader_program = glCreateProgram();
-	glAttachShader(gl_data->shader_program, vertex_shader);
-    glAttachShader(gl_data->shader_program, fragment_shader);
-    glLinkProgram(gl_data->shader_program);
-    glGetShaderiv(gl_data->shader_program, GL_LINK_STATUS, &success);
+	*program = glCreateProgram();
+	glAttachShader(*program, vertex_shader);
+    glAttachShader(*program, fragment_shader);
+    glLinkProgram(*program);
+    glGetShaderiv(*program, GL_LINK_STATUS, &success);
 	if (success != GL_TRUE) {
-		glGetProgramiv(gl_data->shader_program, GL_INFO_LOG_LENGTH, &log_length);
+		glGetProgramiv(*program, GL_INFO_LOG_LENGTH, &log_length);
 		GLchar log_buffer[log_length - 1];
-		glGetProgramInfoLog(gl_data->shader_program, log_length - 1, NULL, log_buffer);
+		glGetProgramInfoLog(*program, log_length - 1, NULL, log_buffer);
 		ERR("glLinkProgram(): %s", log_buffer);
+		return EXIT_FAILURE;
 	}
     glDeleteShader(vertex_shader);
     glDeleteShader(fragment_shader);
+
+	return EXIT_SUCCESS;
+}
+
+int gl_init(gl_data_t *gl_data, Display *display, XVisualInfo *visual_info, Window window) {
+	memset(gl_data, 0, sizeof(gl_data_t));
+	gl_data->display = display;
+	gl_data->window = window;
+	gl_data->mixing = 1.0f;
+	gl_data->texture_transition.active = 0;
+
+	gl3wInit();
+
+	GLXContext glx_context = glXCreateContext(display, visual_info, NULL, GL_TRUE);
+	if (!glXMakeCurrent(gl_data->display, gl_data->window, glx_context)) {
+		ERR("glXMakeCurrent()");
+		return EXIT_FAILURE;
+	}
+
+	glEnable(GL_DEPTH_TEST);
+
+	if (gl_load_shaders(&(gl_data->shader_program), NULL, 0, NULL, 0) != EXIT_SUCCESS) return EXIT_FAILURE;
 
 	GLfloat vertices[] = {
 		1.0f,	1.0f,	0.0f,	1.0f,	1.0f,

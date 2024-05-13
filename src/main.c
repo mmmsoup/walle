@@ -211,26 +211,41 @@ int main(int argc, char **argv) {
 			break;
 		case SUBCMD_SET:
 			const gsiv_t *property = gperf_property_lookup(argv[2], strlen(argv[2]));
+			char *abs_path = NULL;
 			switch (property->value) {
+				case PROPERTY_BGCOL:
+					short valid_colour = 1;
+					if (strlen(argv[3]) != 7) valid_colour = 0;
+					else for (int i = 1; i < 7; i++) valid_colour *= (hex_char_val(argv[3][i]) != -1);
+
+					if (!valid_colour) {
+						ERR("invalid colour '%s'", argv[3]);
+						prog_return = EXIT_FAILURE;
+						break;
+					}
+
+					abs_path = malloc(sizeof(char)*8);
+					strcpy(abs_path, argv[3]);
 				case PROPERTY_BGIMG:
 					window = get_program_window(display);
 					if (window == 0x0) {
 						ERR("get_program_window(): unable to find window");
 						prog_return = EXIT_FAILURE;
+						if (abs_path != NULL) free(abs_path);
 					} else {
 						switch (argc) {
 							case 5:
 								short duration = (short)atoi(argv[4]);
 								XChangeProperty(display, window, ATOM_WALLPAPER_TRANSITION_DURATION, XA_CARDINAL, 16, PropModeReplace, (unsigned char *)&duration, 1);
 							case 4:
-								char *abs_path;
-								absolute_path(&abs_path, argv[3]);
-								if (stbi_valid(abs_path)) {
-									XChangeProperty(display, window, ATOM_WALLPAPER_PATH, XA_STRING, 8, PropModeReplace, (unsigned char *)abs_path, strlen(abs_path));
-								} else {
-									ERR("stbi_valid(): invalid file");
-									prog_return = EXIT_FAILURE;
+								if (abs_path == NULL) {
+									absolute_path(&abs_path, argv[3]);
+									if (!stbi_valid(abs_path)) {
+										ERR("stbi_valid(): invalid file");
+										prog_return = EXIT_FAILURE;
+									}
 								}
+								XChangeProperty(display, window, ATOM_WALLPAPER_PATH, XA_STRING, 8, PropModeReplace, (unsigned char *)abs_path, strlen(abs_path));
 								free(abs_path);
 								break;
 							default:

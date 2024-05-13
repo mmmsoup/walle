@@ -9,4 +9,6 @@
 
 int absolute_path(char **, char*);
 
+char hex_char_val(char);
+
 #endif

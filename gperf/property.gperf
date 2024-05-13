@@ -12,7 +12,8 @@ typedef enum {
 	PROPERTY_BOTTOM		= 1 << 8,
 	PROPERTY_LEFT		= 1 << 9,
 	PROPERTY_RIGHT 		= 1 << 10,
-	PROPERTY_TOP		= 1 << 11
+	PROPERTY_TOP		= 1 << 11,
+	PROPERTY_BGCOL		= 1 << 12 // subscribed via bgimg
 } gperf_properties;
 
 %}
@@ -24,6 +25,7 @@ typedef enum {
 struct gsiv_t;
 %%
 ####
+bgcol,		PROPERTY_BGCOL
 bgimg,		PROPERTY_BGIMG
 bottom,		PROPERTY_BOTTOM
 left,		PROPERTY_LEFT

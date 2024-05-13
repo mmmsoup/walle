@@ -23,7 +23,7 @@
 #define WINDOW_VISIBLE_ATOM_NAME					"_"PROJECT_NAME_CAPS"_WINDOW_VISIBLE"
 
 #define START_WALLPAPER_ENV_VAR						PROJECT_NAME_CAPS"_WALLPAPER"
-#define START_COLOUR								0, 0, 0 // colour of background if no initial --bgimg option is supplied
+#define START_COLOUR								"#000000" // colour of background if no initial --bgimg option is supplied
 
 #define DEFAULT_WALLPAPER_TRANSITION_DURATION		10
 
