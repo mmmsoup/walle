@@ -67,6 +67,7 @@ int main(int argc, char **argv) {
 				"\tdaemon (PROPERTIES_SET)\t\t-> start the server and daemonise with optional properties like the non-daemonised subcommand\n"
 				"\tkill\t\t\t\t-> kill the current instance\n"
 				"\tset [PROPERTY_SET] [VALUE]\t-> set PROPERTY_SET of running instance to VALUE\n"
+				"\tsetroot \"#XXXXXX\"\t\t-> set root window to solid hex colour #XXXXXX\n"
 				"\tsubscribe (PROPERTIES_GET)\t-> subscribe to events when values of space-separated PROPERTIES_GET list change, or subscribe to all events if PROPERTIES_GET is omitted\n"
 				"\thelp\t\t\t\t-> show this help message:)\n"
 		);
@@ -81,6 +82,7 @@ int main(int argc, char **argv) {
 		printf("\n");
 		printf(
 				"PROPERTIES_SET\n"
+				"\tbgcol \"#XXXXXX\" (TRANSITION)\t\t-> set wallpaper to single hex colour #XXXXXX with optional transition duration of TRANSITION milliseconds\n"
 				"\tbgimg [PATH] (TRANSITION)\t\t-> set wallpaper to image at PATH with optional transition duration of TRANSITION milliseconds\n"
 				"\tstruts [TOP] [BOTTOM] [LEFT] [RIGHT]\t-> set empty space at edges of screen in pixels\n"
 				"\ttop [SIZE]\t\t\t\t-> set top strut to SIZE pixels\n"
@@ -162,7 +164,7 @@ int main(int argc, char **argv) {
 		unsigned char g = hex_char_val(argv[2][3]) * 16 + hex_char_val(argv[2][4]);
 		unsigned char b = hex_char_val(argv[2][5]) * 16 + hex_char_val(argv[2][6]);
 
-		unsigned char *img_data = malloc(sizeof(char)*(width*height*4));
+		char *img_data = malloc(sizeof(char)*(width*height*4));
 		for (int i = 0; i < width*height*4; i += 4) {
 			img_data[i] = b;
 			img_data[i+1] = g;
