@@ -9,6 +9,7 @@ typedef enum {
 	SUBCMD_KILL,
 	SUBCMD_SERVER,
 	SUBCMD_SET,
+	SUBCMD_SETROOT,
 	SUBCMD_SUBSCRIBE
 } gperf_subcmds;
 
@@ -27,5 +28,6 @@ help,		SUBCMD_HELP
 kill,		SUBCMD_KILL
 server,		SUBCMD_SERVER
 set,		SUBCMD_SET
+setroot,	SUBCMD_SETROOT
 subscribe,	SUBCMD_SUBSCRIBE
 ####

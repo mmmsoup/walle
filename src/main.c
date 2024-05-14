@@ -99,10 +99,98 @@ int main(int argc, char **argv) {
 
 	int prog_return = EXIT_SUCCESS;
 
+	if (subcmd->value == SUBCMD_SETROOT) {
+		int screen = DefaultScreen(display);
+		Visual *visual = DefaultVisual(display, screen);
+		int width = DisplayWidth(display, screen);
+		int height = DisplayHeight(display, screen);
+		int depth = 24;
+		Window root = RootWindow(display, screen);
+
+		short valid_colour = 1;
+		if (strlen(argv[2]) != 7) valid_colour = 0;
+		else for (int i = 1; i < 7; i++) valid_colour *= (hex_char_val(argv[2][i]) != -1);
+
+		if (!valid_colour) {
+			ERR("invalid colour '%s'", argv[2]);
+			prog_return = EXIT_FAILURE;
+			goto shutdown;
+		}
+
+		/*
+		// unforunately doesn't work with composite window manager... have to create a pixmap instead >:(
+		XColor colour = {
+			.red = (hex_char_val(argv[2][1]) * 16 + hex_char_val(argv[2][2])) << 8,
+			.green = (hex_char_val(argv[2][3]) * 16 + hex_char_val(argv[2][4])) << 8,
+			.blue = (hex_char_val(argv[2][5]) * 16 + hex_char_val(argv[2][6])) << 8,
+			.flags = DoRed | DoBlue | DoGreen
+		};
+		XAllocColor(display, DefaultColormap(display, screen), &colour);
+
+		XSetWindowBackground(display, root, colour.pixel);
+		XClearWindow(display, root);
+		*/
+
+		// _XROOTPMAP_ID and ESETROOT_PMAP_ID stuff taken from https://github.com/himdel/hsetroot
+		Atom prop_root = XInternAtom(display, "_XROOTPMAP_ID", True);
+		Atom prop_eroot = XInternAtom(display, "ESETROOT_PMAP_ID", True);
+
+		Atom type;
+		int format;
+		unsigned long length, after;
+		unsigned char *data_root, *data_eroot;
+
+		if ((prop_root != None) && (prop_eroot != None)) {
+			XGetWindowProperty(display, root, prop_root, 0L, 1L, False, AnyPropertyType, &type, &format, &length, &after, &data_root);
+			if (type == XA_PIXMAP) {
+				XGetWindowProperty(display, root, prop_eroot, 0L, 1L, False, AnyPropertyType, &type, &format, &length, &after, &data_eroot);
+				if (data_root && data_eroot && type == XA_PIXMAP && *((Pixmap*)data_root) == *((Pixmap*)data_eroot)) {
+					XKillClient(display, *((Pixmap*)data_eroot));
+					XFree(data_eroot);
+				}
+			}
+			if (data_root != NULL) XFree(data_root);
+		}
+
+		XKillClient(display, AllTemporary);
+		XSetCloseDownMode(display, RetainTemporary);
+
+		prop_root = XInternAtom(display, "_XROOTPMAP_ID", False);
+		prop_eroot = XInternAtom(display, "ESETROOT_PMAP_ID", False);
+
+		unsigned char r = hex_char_val(argv[2][1]) * 16 + hex_char_val(argv[2][2]);
+		unsigned char g = hex_char_val(argv[2][3]) * 16 + hex_char_val(argv[2][4]);
+		unsigned char b = hex_char_val(argv[2][5]) * 16 + hex_char_val(argv[2][6]);
+
+		unsigned char *img_data = malloc(sizeof(char)*(width*height*4));
+		for (int i = 0; i < width*height*4; i += 4) {
+			img_data[i] = b;
+			img_data[i+1] = g;
+			img_data[i+2] = r;
+			img_data[i+3] = 0;
+		}
+
+		Pixmap pixmap = XCreatePixmap(display, root, width, height, depth);
+		GC gc = XCreateGC(display, pixmap, 0, NULL);
+		XImage *image = XCreateImage(display, visual, depth, ZPixmap, 0, img_data, width, height, 32, 0);
+		XPutImage(display, pixmap, gc, image, 0, 0, 0, 0, width, height);
+		XFree(gc);
+		XFree(image);
+		free(img_data);
+
+		XSetWindowBackgroundPixmap(display, root, pixmap);
+		XClearWindow(display, root);
+
+		XChangeProperty(display, root, prop_root, XA_PIXMAP, 32, PropModeReplace, (unsigned char *) &pixmap, 1);
+		XChangeProperty(display, root, prop_eroot, XA_PIXMAP, 32, PropModeReplace, (unsigned char *) &pixmap, 1);
+
+		goto shutdown;
+	}
+
 	if (props_init(display) != EXIT_SUCCESS) {
 		ERR("props_init(): unable to initialise atoms");
-		XCloseDisplay(display);
-		exit(EXIT_FAILURE);
+		prog_return = EXIT_FAILURE;
+		goto shutdown;
 	}
 
 	Window window;
@@ -348,6 +436,7 @@ int main(int argc, char **argv) {
 			break;
 	}
 
+shutdown:
 	XCloseDisplay(display);
 
 	return prog_return;
