@@ -374,7 +374,15 @@ int main(int argc, char **argv) {
 		case SUBCMD_SUBSCRIBE:
 			int subscribed_atoms = 0;
 			if (argc > 2) {
-				for (int i = 2; i < argc; i++) subscribed_atoms |= gperf_property_lookup(argv[i], strlen(argv[i]))->value;
+				for (int i = 2; i < argc; i++) {
+					const gsiv_t *gsiv = gperf_property_lookup(argv[i], strlen(argv[i]));
+					if (gsiv == NULL) {
+						ERR("not a subscribable property: '%s'", argv[i]);
+						prog_return = EXIT_FAILURE;
+						goto shutdown;
+					}
+					subscribed_atoms |= gsiv->value;
+				}
 			} else subscribed_atoms = 0xffff;
 			subscribed_atoms &= 0xff;
 
