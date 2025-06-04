@@ -6,7 +6,7 @@ typedef enum {
 // subscribable
 	PROPERTY_BGIMG		= 1 << 0,
 	PROPERTY_STRUTS		= 1 << 1,
-	PROPERTY_VISIBILITY = 1 << 2,
+	PROPERTY_VISIBILITY	= 1 << 2,
 	PROPERTY_WORKSPACE	= 1 << 3,
 //
 	PROPERTY_BOTTOM		= 1 << 8,
