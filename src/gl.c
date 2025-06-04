@@ -159,6 +159,9 @@ int gl_init(gl_data_t *gl_data, Display *display, XVisualInfo *visual_info, Wind
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid *)(3 * sizeof(GLfloat)));
 	glEnableVertexAttribArray(1);
 
+	// avoid possible shearing from pictures with odd dimensions
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
 	for (int i = 0; i < 2; i++) {
 		glGenTextures(1, &(gl_data->textures[i].id));
 		glBindTexture(GL_TEXTURE_2D, gl_data->textures[i].id);
