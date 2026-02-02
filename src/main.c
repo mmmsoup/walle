@@ -1,6 +1,7 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <X11/Xatom.h>
 #include <X11/Xlib.h>
 
@@ -56,7 +57,11 @@ int main(int argc, char **argv) {
 		ERR("no subcommand provided - try '%s help'", argv[0]);
 		return EXIT_FAILURE;
 	} else {
-		 subcmd = gperf_subcmd_lookup(argv[1], strlen(argv[1]));
+		subcmd = gperf_subcmd_lookup(argv[1], strlen(argv[1]));
+		if (subcmd == NULL) {
+			ERR("unknown subcommand '%s' - try '%s help'", argv[1], argv[0]);
+			return EXIT_FAILURE;
+		}
 	}
 	
 	if (subcmd->value == SUBCMD_HELP) {
@@ -67,7 +72,7 @@ int main(int argc, char **argv) {
 				"\tdaemon (PROPERTIES_SET)\t\t-> start the server and daemonise with optional properties like the non-daemonised subcommand\n"
 				"\tkill\t\t\t\t-> kill the current instance\n"
 				"\tset [PROPERTY_SET] [VALUE]\t-> set PROPERTY_SET of running instance to VALUE\n"
-				"\tsetroot \"#XXXXXX\"\t\t-> set root window to solid hex colour #XXXXXX\n"
+				"\tsetroot \"#XXXXXX\"\t\t-> set root window of X server to solid hex colour #XXXXXX\n"
 				"\tsubscribe (PROPERTIES_GET)\t-> subscribe to events when values of space-separated PROPERTIES_GET list change, or subscribe to all events if PROPERTIES_GET is omitted\n"
 				"\thelp\t\t\t\t-> show this help message:)\n"
 		);
@@ -254,6 +259,62 @@ int main(int argc, char **argv) {
 
 					i++;
 				}
+
+				// load last wallpaper if none given
+				char *lw_env_raw = getenv(LAST_WALLPAPER_FP_ENVVAR);
+				char *last_wallpaper_fp;
+				int usehistory = 1;
+				FILE *fp;
+				if (lw_env_raw != NULL && strcmp(lw_env_raw, "-1") == 0) {
+					usehistory = 0;
+				} else {
+					if (lw_env_raw != NULL) absolute_path(&last_wallpaper_fp, lw_env_raw);
+					else absolute_path(&last_wallpaper_fp, LAST_WALLPAPER_FP_DEFAULT);
+					struct stat statbuf;
+					if (stat(last_wallpaper_fp, &statbuf) != 0) {
+						for (size_t i = 1; i < strlen(last_wallpaper_fp); i++) {
+							if (last_wallpaper_fp[i] == '/' || last_wallpaper_fp[i] == '\0') {
+								last_wallpaper_fp[i] = '\0';
+								if (stat(last_wallpaper_fp, &statbuf) != 0) {
+									if (errno == ENOENT) {
+										if (mkdir(last_wallpaper_fp, 0700) != 0) {
+											ERR_ERRNO("mkdir()");
+											usehistory = 0;
+											break;
+										}
+									} else {
+										ERR_ERRNO("stat()");
+										usehistory = 0;
+										break;
+									}
+								}
+								last_wallpaper_fp[i] = '/';
+							}
+						}
+						fp = fopen(last_wallpaper_fp, "w+");
+						if (fp == NULL) {
+							ERR_ERRNO("fopen()");
+							usehistory = 0;
+						} else {
+							fclose(fp);
+						}
+					}
+				}
+
+				if (usehistory) {
+					DEBUG("using '%s' as history file", last_wallpaper_fp);
+					startup_properties.historyfile = last_wallpaper_fp;
+					if (startup_properties.bgimg == NULL) {
+						fp = fopen(last_wallpaper_fp, "r");
+						fseek(fp, 0L, SEEK_END);
+						int hflen = ftell(fp);
+						rewind(fp);
+						startup_properties.bgimg = malloc(sizeof(char)*(hflen+1));
+						fread(startup_properties.bgimg, sizeof(char), hflen, fp);
+						startup_properties.bgimg[hflen] = '\0';
+						fclose(fp);
+					}
+				} else DEBUG("running without history file");
 
 				if (argv[1][0] == 'd') { // daemonise
 					int fildes[2];

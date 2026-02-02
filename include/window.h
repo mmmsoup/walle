@@ -39,6 +39,7 @@ extern Atom ATOM_WINDOW_VISIBLE;
 typedef struct {
 	char *bgimg;
 	unsigned short struts[4]; // left right top bottom
+	char *historyfile;
 } startup_properties_t;
 
 int props_init(Display *);

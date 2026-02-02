@@ -174,6 +174,9 @@ int set_net_wm_strut_partial(Display *display, Window window, short left, short 
 int window_run(Display *display, startup_properties_t startup_properties, int fd) {
 	if (bspwm_init(display) != EXIT_SUCCESS) WR_RET(EXIT_FAILURE);
 
+	//printf("%s\n", startup_properties.bgimg);
+	//return 0;
+
 	Screen *screen = DefaultScreenOfDisplay(display);
 	unsigned int screen_width = WidthOfScreen(screen);
 	unsigned int screen_height = HeightOfScreen(screen);
@@ -226,10 +229,20 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 		gl_load_texture(&gl_data, 0, startup_properties.bgimg);
 		gl_load_texture(&gl_data, 1, startup_properties.bgimg);
 		XChangeProperty(display, window, ATOM_WALLPAPER_PATH, XA_STRING, 8, PropModeReplace, (unsigned char *)(startup_properties.bgimg), strlen(startup_properties.bgimg));
+		if (startup_properties.historyfile != NULL) {
+			FILE *fp = fopen(startup_properties.historyfile, "w");
+			fwrite(startup_properties.bgimg, sizeof(char), strlen(startup_properties.bgimg), fp);
+			fclose(fp);
+		}
 		free(startup_properties.bgimg);
 	} else {
 		gl_load_texture(&gl_data, 0, START_COLOUR);
 		gl_load_texture(&gl_data, 1, START_COLOUR);
+		if (startup_properties.historyfile != NULL) {
+			FILE *fp = fopen(startup_properties.historyfile, "w");
+			fwrite(START_COLOUR, sizeof(char), strlen(startup_properties.bgimg), fp);
+			fclose(fp);
+		}
 	}
 	gl_show_texture(&gl_data, 0, 0);
 
@@ -305,6 +318,7 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 						//glXMakeCurrent(display, None, NULL);
 						//glXDestroyContext(display, glx_context);
 						XDestroyWindow(display, window);
+						free(startup_properties.historyfile);
 						DEBUG("killed");
 						goto FINISH;
 					}
@@ -327,6 +341,11 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 						XGetWindowProperty(display, window, ATOM_WALLPAPER_PATH, 0L, bytes_after/4+1, 0, XA_STRING, &type, &format, &nitems, &bytes_after, &data);
 
 						if (gl_load_texture(&gl_data, 1 - gl_data.current_texture, (char*)data) == EXIT_SUCCESS) {
+							if (startup_properties.historyfile != NULL) {
+								FILE *fp = fopen(startup_properties.historyfile, "w");
+								fwrite(data, sizeof(char), strlen((char*)data), fp);
+								fclose(fp);
+							}
 							DEBUG("setting wallpaper to '%s' (transition %ims)", data, transition_duration);
 							gl_show_texture(&gl_data, 1 - gl_data.current_texture, transition_duration);
 						}
