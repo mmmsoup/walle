@@ -244,10 +244,13 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 			fclose(fp);
 		}
 	}
-	gl_show_texture(&gl_data, 0, 0);
 
 	XMapWindow(display, window);
 	XFlush(display);
+
+	gl_resize(&gl_data);
+	gl_show_texture(&gl_data, 0, 0);
+	gl_render(&gl_data);
 
 	// get new connection for monitoring visibility of wallpaper window
 	Display *dpy_for_root = XOpenDisplay(NULL);
@@ -293,7 +296,6 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 	int pollret = 0;
 	while (1) {
 		gl_render(&gl_data);
-		usleep(1000);
 
 		// block indefinitely if not animating wallpaper, otherwise just check with timeout 0 for events
 		pollret = poll(pollfds, 2, gl_data.texture_transition.active - 1);
