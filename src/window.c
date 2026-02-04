@@ -248,6 +248,8 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 	XMapWindow(display, window);
 	XFlush(display);
 
+	set_net_wm_strut_partial(display, window, struts[0], struts[1], struts[2], struts[3]);
+
 	gl_resize(&gl_data);
 	gl_show_texture(&gl_data, 0, 0);
 	gl_render(&gl_data);
@@ -277,15 +279,6 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 	window_list_new(&obscuring_windows);
 	unsigned int current_desktop = 0;
 
-	// tell parent process to return: DO NOT use WR_RET() after this
-	if (fd != 0) {
-		int code = EXIT_SUCCESS;
-		write(fd, (char*)&code, sizeof(int));
-		close(fd);
-		freopen("/dev/null", "w", stdout);
-		freopen("/dev/null", "w", stderr);
-	}
-
 	// for subsequent XGetWindowProperty calls
 	Atom type;
 	int format;
@@ -314,6 +307,17 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 			DEBUG("%s event received", xevent_name(event.type));
 			
 			switch (event.type) {
+				case MapNotify:
+					// tell parent process to return: DO NOT use WR_RET() after this
+					if (fd != 0) {
+						int code = EXIT_SUCCESS;
+						write(fd, (char*)&code, sizeof(int));
+						close(fd);
+						fd = 0;
+						freopen("/dev/null", "w", stdout);
+						freopen("/dev/null", "w", stderr);
+					}
+					break;
 				case ClientMessage:
 					if (event.xclient.message_type == ATOM_WM_PROTOCOLS && (Atom)(event.xclient.data.l[0]) == ATOM_WM_DELETE_WINDOW) {
 						set_net_wm_strut_partial(display, window, 0, 0, 0, 0);
@@ -327,7 +331,7 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 				case Expose:
 					if (event.xexpose.count != 0) break;
 				case ConfigureNotify:
-					set_net_wm_strut(display, window, struts[0], struts[1], struts[2], struts[3]);
+					set_net_wm_strut_partial(display, window, struts[0], struts[1], struts[2], struts[3]);
 					gl_resize(&gl_data);
 					break;
 				case PropertyNotify:
