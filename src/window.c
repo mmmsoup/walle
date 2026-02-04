@@ -248,6 +248,7 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 	XMapWindow(display, window);
 	XFlush(display);
 
+	set_net_wm_strut(display, window, struts[0], struts[1], struts[2], struts[3]);
 	set_net_wm_strut_partial(display, window, struts[0], struts[1], struts[2], struts[3]);
 
 	gl_resize(&gl_data);
@@ -320,7 +321,7 @@ int window_run(Display *display, startup_properties_t startup_properties, int fd
 					break;
 				case ClientMessage:
 					if (event.xclient.message_type == ATOM_WM_PROTOCOLS && (Atom)(event.xclient.data.l[0]) == ATOM_WM_DELETE_WINDOW) {
-						set_net_wm_strut_partial(display, window, 0, 0, 0, 0);
+						set_net_wm_strut(display, window, 0, 0, 0, 0);
 						//glXMakeCurrent(display, None, NULL);
 						//glXDestroyContext(display, glx_context);
 						XDestroyWindow(display, window);
